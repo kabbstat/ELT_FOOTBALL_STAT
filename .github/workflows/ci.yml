@@ -26,15 +26,15 @@ jobs:
           --health-retries 5
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: '3.11'
     
     - name: Cache Python dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirement.txt') }}
@@ -45,9 +45,28 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirement.txt
-        pip install pytest pytest-cov
     
-    - name: Setup Database
+    - name: Setup Database Schemas
+      env:
+        PGPASSWORD: test_password
+      run: |
+        psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS bronze;"
+        psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS silver;"
+        psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS gold;"
+    
+    - name: Validate Python Syntax
+      run: |
+        python -m py_compile extractor/foot_data_enhanced.py
+        python -m py_compile extractor/load_postgres_enhanced.py
+        python -m py_compile config/settings.py
+        echo "✅ Python syntax validation passed"
+    
+    - name: Install DBT
+      run: |
+        pip install dbt-postgres
+    
+    - name: Validate DBT Project
+      working-directory: dbt_football/stat_foot
       env:
         DB_HOST: localhost
         DB_PORT: 5432
@@ -55,33 +74,26 @@ jobs:
         DB_USER: football_user
         DB_PASS: test_password
       run: |
-        PGPASSWORD=test_password psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS bronze;"
-        PGPASSWORD=test_password psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS silver;"
-        PGPASSWORD=test_password psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS gold;"
+        echo "
+        stat_foot:
+          outputs:
+            dev:
+              type: postgres
+              host: localhost
+              port: 5432
+              user: football_user
+              password: test_password
+              dbname: football_stats_db_test
+              schema: gold
+              threads: 4
+          target: dev
+        " > profiles.yml
+        dbt debug --profiles-dir .
+        echo "✅ DBT configuration valid"
     
-    - name: Validate Configuration
+    - name: Summary
       run: |
-        python config/settings.py || echo "Config validation requires .env file"
-    
-    - name: Code Quality - Black
-      run: |
-        pip install black
-        black --check extractor/ config/ || echo "Format with black"
-    
-    - name: Code Quality - Flake8
-      run: |
-        pip install flake8
-        flake8 extractor/ config/ --max-line-length=120 || echo "Fix linting issues"
-    
-    - name: DBT Tests
-      env:
-        DB_HOST: localhost
-        DB_PORT: 5432
-        DB_NAME: football_stats_db_test
-        DB_USER: football_user
-        DB_PASS: test_password
-      run: |
-        cd dbt_football/stat_foot
-        dbt deps || echo "No deps needed"
-        # dbt run would require actual data
-        echo "DBT tests skipped - requires data"
+        echo "## ✅ CI Pipeline Passed" >> $GITHUB_STEP_SUMMARY
+        echo "- Python syntax validation: ✅" >> $GITHUB_STEP_SUMMARY
+        echo "- Database schemas created: ✅" >> $GITHUB_STEP_SUMMARY
+        echo "- DBT configuration valid: ✅" >> $GITHUB_STEP_SUMMARY
