@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -71,7 +71,8 @@ def get_database_connection():
 def load_data(query: str):
     """Load data from database with caching"""
     engine = get_database_connection()
-    return pd.read_sql(query, engine)
+    with engine.connect() as conn:
+        return pd.read_sql(text(query), conn)
 
 
 # ============================================================================
@@ -160,6 +161,25 @@ def main():
         )
         
         st.markdown("---")
+        st.markdown("### 🎯 Filters")
+        
+        # Year filter
+        available_years = [2024, 2023]
+        selected_year = st.selectbox(
+            "📅 Select Season",
+            options=["All Years"] + available_years,
+            index=0
+        )
+        
+        # Competition filter
+        available_competitions = ["All Competitions", "PL - Premier League", "FL1 - Ligue 1", "PD - La Liga"]
+        selected_competition_filter = st.selectbox(
+            "🏆 Select Competition",
+            options=available_competitions,
+            index=0
+        )
+        
+        st.markdown("---")
         st.markdown("### 📅 Data Refresh")
         if st.button("🔄 Refresh Data"):
             st.cache_data.clear()
@@ -180,6 +200,16 @@ def main():
         comp_stats = get_competition_stats()
         team_perf = get_team_performance()
         recent = get_recent_matches(10)
+        
+        # Apply year filter
+        if selected_year != "All Years":
+            comp_stats = comp_stats[comp_stats['match_year'] == selected_year]
+        
+        # Apply competition filter
+        if selected_competition_filter != "All Competitions":
+            comp_code = selected_competition_filter.split(" - ")[0]
+            comp_stats = comp_stats[comp_stats['competition_code'] == comp_code]
+            team_perf = team_perf[team_perf['competition_code'] == comp_code]
         
         # Key Metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -243,6 +273,10 @@ def main():
         
         comp_stats = get_competition_stats()
         
+        # Apply year filter from sidebar
+        if selected_year != "All Years":
+            comp_stats = comp_stats[comp_stats['match_year'] == selected_year]
+        
         # Filter by competition
         selected_comp = st.selectbox(
             "Select Competition",
@@ -305,13 +339,18 @@ def main():
         
         team_perf = get_team_performance()
         
-        # Filter by competition
+        # Apply competition filter from sidebar if set
+        if selected_competition_filter != "All Competitions":
+            comp_code = selected_competition_filter.split(" - ")[0]
+            team_perf = team_perf[team_perf['competition_code'] == comp_code]
+        
+        # Filter by competition (page level)
         selected_comp = st.selectbox(
             "Select Competition",
-            team_perf['competition_name'].unique()
+            team_perf['competition_code'].unique()
         )
         
-        filtered_teams = team_perf[team_perf['competition_name'] == selected_comp].copy()
+        filtered_teams = team_perf[team_perf['competition_code'] == selected_comp].copy()
         
         # Top performers
         col1, col2, col3 = st.columns(3)
@@ -372,6 +411,15 @@ def main():
         
         comp_stats = get_competition_stats()
         
+        # Apply year filter from sidebar
+        if selected_year != "All Years":
+            comp_stats = comp_stats[comp_stats['match_year'] == selected_year]
+        
+        # Apply competition filter from sidebar
+        if selected_competition_filter != "All Competitions":
+            comp_code = selected_competition_filter.split(" - ")[0]
+            comp_stats = comp_stats[comp_stats['competition_code'] == comp_code]
+        
         # High scoring matches analysis
         col1, col2 = st.columns(2)
         
@@ -426,6 +474,11 @@ def main():
         st.header("🔍 Team Deep Dive Analysis")
         
         team_perf = get_team_performance()
+        
+        # Apply competition filter from sidebar
+        if selected_competition_filter != "All Competitions":
+            comp_code = selected_competition_filter.split(" - ")[0]
+            team_perf = team_perf[team_perf['competition_code'] == comp_code]
         
         # Team selector
         selected_team = st.selectbox(

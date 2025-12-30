@@ -2,9 +2,11 @@
 Enhanced PostgreSQL Loader with Error Handling and Data Validation
 """
 import os
+import json
 import logging
 from pathlib import Path
 from typing import Optional
+import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -114,6 +116,19 @@ class PostgreSQLLoader:
             # Read parquet
             df = pd.read_parquet(file_path)
             
+            # Convert numpy arrays and complex objects to JSON strings for PostgreSQL
+            for col in df.columns:
+                if df[col].dtype == 'object':
+                    def convert_to_json(x):
+                        if x is None or (isinstance(x, float) and pd.isna(x)):
+                            return None
+                        if isinstance(x, np.ndarray):
+                            return json.dumps(x.tolist())
+                        if isinstance(x, (list, dict)):
+                            return json.dumps(x)
+                        return x
+                    df[col] = df[col].apply(convert_to_json)
+            
             # Validate
             if not self._validate_dataframe(df, table_name):
                 return 0
@@ -121,7 +136,7 @@ class PostgreSQLLoader:
             # Ensure schema exists
             self._create_schema(schema)
             
-            # Load to database
+            # Load to database in smaller chunks
             rows_loaded = df.to_sql(
                 name=table_name,
                 con=self.engine,
@@ -129,7 +144,7 @@ class PostgreSQLLoader:
                 if_exists=if_exists,
                 index=False,
                 method='multi',
-                chunksize=1000
+                chunksize=100  # Smaller chunks to avoid SQL parameter limit
             )
             
             logger.info(f"Successfully loaded {len(df)} rows to {schema}.{table_name}")
@@ -191,14 +206,16 @@ class PostgreSQLLoader:
     def get_table_stats(self, schema: str, table: str) -> dict:
         """Get statistics about a table"""
         try:
-            query = f"""
+            query = text(f"""
             SELECT 
                 COUNT(*) as row_count,
                 COUNT(DISTINCT id) as unique_ids
             FROM {schema}.{table}
-            """
-            result = self.execute_query(query)
-            stats = result.iloc[0].to_dict()
+            """)
+            with self.engine.connect() as conn:
+                result = conn.execute(query)
+                row = result.fetchone()
+                stats = {'row_count': row[0], 'unique_ids': row[1]}
             logger.info(f"Stats for {schema}.{table}: {stats}")
             return stats
         except Exception as e:
