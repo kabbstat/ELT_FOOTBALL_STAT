@@ -1,12 +1,32 @@
 version: 2
 
 sources:
-  - name: football_raw
+  - name: bronze
     description: "Raw data loaded from football API"
     database: football_stats_db
-    schema : bronze
+    schema: bronze
     tables:
-      - name: all_matches
-        description: "All football matches data (all seasons)"
+      - name: matches
+        description: "All football matches data"
+        columns:
+          - name: id
+            description: Unique match identifier
+            tests:
+              - unique
+              - not_null
+          - name: status
+            description: Match status
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['FINISHED', 'SCHEDULED', 'IN_PLAY', 'PAUSED', 'TIMED', 'POSTPONED', 'CANCELLED']
+          - name: hometeam_id
+            description: Home team ID
+            tests:
+              - not_null
+          - name: awayteam_id
+            description: Away team ID
+            tests:
+              - not_null
       - name: competitions
         description: "Details of football competitions"

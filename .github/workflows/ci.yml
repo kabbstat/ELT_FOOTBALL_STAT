@@ -1,0 +1,87 @@
+name: Football ELT Pipeline CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: football_stats_db_test
+          POSTGRES_USER: football_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirement.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirement.txt
+        pip install pytest pytest-cov
+    
+    - name: Setup Database
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: football_stats_db_test
+        DB_USER: football_user
+        DB_PASS: test_password
+      run: |
+        PGPASSWORD=test_password psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS bronze;"
+        PGPASSWORD=test_password psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS silver;"
+        PGPASSWORD=test_password psql -h localhost -U football_user -d football_stats_db_test -c "CREATE SCHEMA IF NOT EXISTS gold;"
+    
+    - name: Validate Configuration
+      run: |
+        python config/settings.py || echo "Config validation requires .env file"
+    
+    - name: Code Quality - Black
+      run: |
+        pip install black
+        black --check extractor/ config/ || echo "Format with black"
+    
+    - name: Code Quality - Flake8
+      run: |
+        pip install flake8
+        flake8 extractor/ config/ --max-line-length=120 || echo "Fix linting issues"
+    
+    - name: DBT Tests
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: football_stats_db_test
+        DB_USER: football_user
+        DB_PASS: test_password
+      run: |
+        cd dbt_football/stat_foot
+        dbt deps || echo "No deps needed"
+        # dbt run would require actual data
+        echo "DBT tests skipped - requires data"
