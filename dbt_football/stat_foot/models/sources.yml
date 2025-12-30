@@ -19,12 +19,12 @@ sources:
             tests:
               - not_null
               - accepted_values:
-                  values: ['FINISHED', 'SCHEDULED', 'IN_PLAY', 'PAUSED', 'TIMED', 'POSTPONED', 'CANCELLED']
-          - name: hometeam_id
+                  values: ['FINISHED', 'SCHEDULED', 'IN_PLAY', 'PAUSED', 'TIMED', 'POSTPONED', 'CANCELLED', 'SUSPENDED', 'AWARDED']
+          - name: '"homeTeam_id"'
             description: Home team ID
             tests:
               - not_null
-          - name: awayteam_id
+          - name: '"awayTeam_id"'
             description: Away team ID
             tests:
               - not_null

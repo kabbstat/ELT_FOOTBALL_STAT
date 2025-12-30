@@ -58,19 +58,19 @@ load_bronze_task= PythonOperator(
 # Task 3 : DBT : transformation bronze - Gold
 dbt_run = BashOperator(
     task_id = 'dbt_transformation',
-    bash_command ='cd /opt/airflow/dbt_football/stat_foot && dbt run --profiles-dir /home/airflow/.dbt',
+    bash_command ='cd /opt/airflow/dbt_football/stat_foot && dbt run --profiles-dir /home/airflow/.dbt --target docker',
     dag = dag,
 )
 # task 4 : DBT : run test
 dbt_test = BashOperator(
     task_id = 'db_test',
-    bash_command = 'cd /opt/airflow/dbt_football/stat_foot && dbt test --profiles-dir /home/airflow/.dbt',
+    bash_command = 'cd /opt/airflow/dbt_football/stat_foot && dbt test --profiles-dir /home/airflow/.dbt --target docker',
     dag = dag,
 )
 # task 5 : DBT : generate doc 
 dbt_doc = BashOperator(
     task_id = 'dbt_docs_generate',
-    bash_command = 'cd /opt/airflow/dbt_football/stat_foot && dbt docs generate --profiles-dir /home/airflow/.dbt',
+    bash_command = 'cd /opt/airflow/dbt_football/stat_foot && dbt docs generate --profiles-dir /home/airflow/.dbt --target docker',
     dag= dag,
 )
 extract_task >> load_bronze_task >> dbt_run >> dbt_test >> dbt_doc

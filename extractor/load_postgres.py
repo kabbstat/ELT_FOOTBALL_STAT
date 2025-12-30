@@ -52,10 +52,10 @@ def load_parquet_to_postgres(schema='bronze', season=2023):
     data_dir = get_data_dir()
     print(f"📂 Répertoire de données: {data_dir}")
     
-    # ✅ Liste des fichiers à charger avec leur nom dynamique
+    #  Liste des fichiers à charger avec leur nom dynamique
     files_to_load = [
-        f'all_matches_{season}.parquet',  # ✅ Fichier dynamique selon saison
-        'competitions.parquet'             # ✅ Fichier des compétitions
+        f'all_matches_{season}.parquet',  #  Fichier dynamique selon saison
+        'competitions.parquet'             #  Fichier des compétitions
     ]
     
     for file in files_to_load:
@@ -69,7 +69,7 @@ def load_parquet_to_postgres(schema='bronze', season=2023):
         # Nom de la table = nom du fichier sans extension
         # all_matches_2023.parquet → all_matches (on garde juste le préfixe)
         if file.startswith('all_matches'):
-            table_name = 'all_matches'  # ✅ Toujours la même table
+            table_name = 'all_matches'  #  Toujours la même table
         else:
             table_name = file.replace('.parquet', '')
         
@@ -84,15 +84,15 @@ def load_parquet_to_postgres(schema='bronze', season=2023):
         df.to_sql(
             table_name, 
             engine, 
-            schema=schema,  # ✅ Utiliser le schema (bronze, silver, gold)
-            if_exists='append',  # ✅ APPEND au lieu de REPLACE pour cumuler les saisons
+            schema=schema,  #  Utiliser le schema (bronze, silver, gold)
+            if_exists='append',  #  APPEND au lieu de REPLACE pour cumuler les saisons
             index=False, 
             dtype=dtype_mapping
         )
         
-        print(f"✅ Table {schema}.{table_name} chargée avec succès ({len(df)} lignes)")
+        print(f" Table {schema}.{table_name} chargée avec succès ({len(df)} lignes)")
     
-    print(f"🎉 Chargement terminé pour la saison {season}")
+    print(f" Chargement terminé pour la saison {season}")
 
 if __name__ == "__main__":
     load_parquet_to_postgres()

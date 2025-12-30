@@ -13,7 +13,7 @@ try:
     with engine.connect() as conn:
         result = conn.execute(text("SELECT version()"))
         version = result.fetchone()[0]
-        print(f"✅ Connexion réussie!")
-        print(f"📊 PostgreSQL version: {version}")
+        print(f" Connexion réussie!")
+        print(f" PostgreSQL version: {version}")
 except Exception as e:
-    print(f"❌ Erreur de connexion: {e}")
+    print(f" Erreur de connexion: {e}")
