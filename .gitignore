@@ -1,0 +1,45 @@
+# Environment variables
+.env
+/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Airflow
+airflow/logs/
+logs/
+
+# Data files
+data/
+*.json
+*.csv
+*.parquet
+
+# DBT
+dbt_football/stat_foot/target/
+dbt_football/stat_foot/dbt_packages/
+dbt_football/stat_foot/logs/
+dbt_football/logs/
+target/
+dbt_packages/
+
+# Sensitive files
+psql.txt
+*.sql
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

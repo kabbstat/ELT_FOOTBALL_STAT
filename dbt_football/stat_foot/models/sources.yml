@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: football_raw
+    description: "Raw data loaded from football API"
+    database: football_stats_db
+    schema : bronze
+    tables:
+      - name: all_matches
+        description: "All football matches data (all seasons)"
+      - name: competitions
+        description: "Details of football competitions"

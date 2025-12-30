@@ -1,0 +1,81 @@
+version: 2
+
+models:
+  - name: mart_team_stats
+    description: "Comprehensive team statistics aggregated by competition"
+    columns:
+      - name: team_id
+        description: "Unique team identifier"
+        data_tests:
+          - not_null
+      
+      - name: team_name
+        description: "Team name"
+        data_tests:
+          - not_null
+      
+      - name: league_code
+        description: "Competition code (PL, FL1, PD)"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['PL', 'FL1', 'PD']
+      
+      - name: total_matches
+        description: "Total matches played"
+        data_tests:
+          - not_null
+      
+      - name: total_points
+        description: "Total points (3 for win, 1 for draw)"
+        data_tests:
+          - not_null
+      
+      - name: win_rate
+        description: "Percentage of matches won"
+
+  - name: mart_league_standings
+    description: "Current league standings with ranking"
+    columns:
+      - name: league_code
+        description: "Competition code"
+        data_tests:
+          - not_null
+      
+      - name: team_rank
+        description: "Current position in the league"
+        data_tests:
+          - not_null
+      
+      - name: team_name
+        description: "Team name"
+        data_tests:
+          - not_null
+
+  - name: mart_match_overview
+    description: "High-level match statistics and trends"
+    columns:
+      - name: league_code
+        description: "Competition code"
+      
+      - name: total_matches
+        description: "Total matches in the league"
+      
+      - name: avg_goals_per_match
+        description: "Average goals per match"
+
+  - name: mart_team_form
+    description: "Team form based on last 5 matches"
+    columns:
+      - name: team_id
+        description: "Team identifier"
+      
+      - name: team_name
+        description: "Team name"
+      
+      - name: last_5_points
+        description: "Points from last 5 matches"
+      
+      - name: current_form
+        description: "Form indicator (W/D/L sequence)"

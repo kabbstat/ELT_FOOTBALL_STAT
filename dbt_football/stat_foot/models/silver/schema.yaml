@@ -1,0 +1,65 @@
+version: 2
+
+models:
+  - name: stg_matches
+    description: "Cleaned and standardized matches data"
+    columns:
+      - name: match_id
+        description: "Unique match identifier"
+        data_tests:
+          - unique
+          - not_null
+      
+      - name: match_datetime
+        description: "Match date and time in UTC"
+        data_tests:
+          - not_null
+      
+      - name: status
+        description: "Match status"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['FINISHED', 'IN_PLAY', 'PAUSED', 'SCHEDULED']
+      
+      - name: league_code
+        description: "Competition code (PL, FL1, PD)"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['PL', 'FL1', 'PD']
+      
+      - name: full_time_home_score
+        description: "Home team final score"
+      
+      - name: full_time_away_score
+        description: "Away team final score"
+      
+      - name: match_result
+        description: "Match outcome"
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Home Win', 'Away Win', 'Draw', 'Unknown']
+  
+  - name: stg_competitions
+    description: "Cleaned competitions metadata"
+    columns:
+      - name: competition_id
+        description: "Unique competition identifier"
+        data_tests:
+          - unique
+          - not_null
+      
+      - name: competition_code
+        description: "Competition short code"
+        data_tests:
+          - unique
+          - not_null
+      
+      - name: competition_name
+        description: "Full competition name"
+        data_tests:
+          - not_null
