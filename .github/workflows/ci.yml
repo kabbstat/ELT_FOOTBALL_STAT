@@ -1,8 +1,9 @@
+# Mise a jour : Fevrier 2026 - Validation Elasticsearch scripts
 name: Football ELT Pipeline CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, data_foot_kibana ]
   pull_request:
     branches: [ main ]
 

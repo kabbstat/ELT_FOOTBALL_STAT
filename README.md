@@ -1,108 +1,193 @@
-# ⚽ Football Statistics ELT Pipeline
+# Football Statistics ELT Pipeline
 
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://python.org)
-[![Airflow](https://img.shields.io/badge/Airflow-2.7-017CEE?logo=apache-airflow&logoColor=white)](https://airflow.apache.org)
-[![dbt](https://img.shields.io/badge/dbt-1.7-FF694B?logo=dbt&logoColor=white)](https://getdbt.com)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)](https://postgresql.org)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
-
-> **Production-grade ELT pipeline** for European football statistics analysis using modern data engineering practices.
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Status-Production-success" alt="Status">
-  <img src="https://img.shields.io/badge/Leagues-3-blue" alt="Leagues">
-  <img src="https://img.shields.io/badge/Matches-2000+-green" alt="Matches">
-</p>
+Pipeline ELT complet pour l'analyse de statistiques de football europeen (Premier League, La Liga, Ligue 1) avec une architecture medallion, Elasticsearch/Kibana pour l'analytics, et un dashboard interactif.
 
 ---
 
-## 🎯 Overview
+## Table des Matieres
 
-End-to-end data pipeline extracting football match data from **Premier League**, **La Liga**, and **Ligue 1**, transforming it through a **medallion architecture** (Bronze → Silver → Gold), and visualizing insights via an interactive dashboard.
-
-### Key Features
-
-| Feature | Description |
-|---------|-------------|
-| **Automated Extraction** | Weekly data pulls from Football-Data.org API |
-| **Medallion Architecture** | Bronze (raw) → Silver (cleaned) → Gold (aggregated) |
-| **Orchestration** | Apache Airflow with dependency management & monitoring |
-| **Data Quality** | 9 automated DBT tests (uniqueness, not-null, custom validations) |
-| **Interactive Dashboard** | 5 analytical views with Streamlit & Plotly |
+1. [Vue d'ensemble](#vue-densemble)
+2. [Architecture](#architecture)
+3. [Stack Technique](#stack-technique)
+4. [Sources de Donnees](#sources-de-donnees)
+5. [Installation](#installation)
+6. [Utilisation](#utilisation)
+7. [Structure du Projet](#structure-du-projet)
+8. [Tests de Qualite](#tests-de-qualite)
 
 ---
 
-## 🏗️ Architecture
+## Vue d'ensemble
+
+Ce projet implemente un pipeline ELT (Extract, Load, Transform) pour collecter, transformer et analyser des donnees de football provenant de plusieurs sources :
+
+- Matchs et resultats depuis Football-Data.org API
+- Donnees meteorologiques via OpenWeather API
+- Valeurs de marche des equipes depuis Transfermarkt
+
+Les donnees sont stockees dans PostgreSQL avec une architecture medallion (Bronze, Silver, Gold) et indexees dans Elasticsearch pour des recherches et visualisations avancees via Kibana.
+
+---
+
+## Architecture
 
 ```
-┌──────────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Football API    │────▶│   BRONZE    │────▶│   SILVER    │────▶│    GOLD     │
-│  (Data Source)   │     │  Raw Data   │     │  Cleaned    │     │ Aggregated  │
-└──────────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-                               │                                        │
-                               │            Apache Airflow              │
-                               │◀──────────────────────────────────────▶│
-                               │              DBT Core                  │
-                                                                        │
-                                                                        ▼
-                                                               ┌─────────────────┐
-                                                               │   Dashboard     │
-                                                               │   (Streamlit)   │
-                                                               └─────────────────┘
+                           SOURCES DE DONNEES
+     ┌─────────────────┬─────────────────┬─────────────────┐
+     │  Football API   │  OpenWeather    │  Transfermarkt  │
+     │   (Matchs)      │   (Meteo)       │  (Valeurs)      │
+     └────────┬────────┴────────┬────────┴────────┬────────┘
+              │                 │                 │
+              └─────────────────┼─────────────────┘
+                                │
+                    ┌───────────▼───────────┐
+                    │   EXTRACTION LAYER    │
+                    │   (Python Scripts)    │
+                    │                       │
+                    │  - foot_data.py       │
+                    │  - fetch_weather.py   │
+                    │  - fetch_transfermarkt│
+                    └───────────┬───────────┘
+                                │
+              ┌─────────────────┼─────────────────┐
+              │                 │                 │
+              ▼                 │                 ▼
+┌─────────────────────┐         │    ┌─────────────────────┐
+│     POSTGRESQL      │         │    │   ELASTICSEARCH     │
+│                     │         │    │                     │
+│  ┌───────────────┐  │         │    │  Index: football-   │
+│  │    BRONZE     │  │         │    │  enriched-matches   │
+│  │  (Raw Data)   │  │         │    │                     │
+│  │  - matches    │  │         │    │  Features:          │
+│  │  - weather    │  │         │    │  - Full-text search │
+│  │  - team_values│  │         │    │  - Aggregations     │
+│  └───────┬───────┘  │         │    │  - Geo queries      │
+│          │ DBT      │         │    └──────────┬──────────┘
+│          ▼          │         │               │
+│  ┌───────────────┐  │         │               ▼
+│  │    SILVER     │  │         │    ┌─────────────────────┐
+│  │  (Cleaned)    │  │         │    │      KIBANA         │
+│  │  - stg_matches│  │         │    │                     │
+│  │  - stg_teams  │  │         │    │  - Dashboards       │
+│  │  - stg_weather│  │         │    │  - Visualizations   │
+│  └───────┬───────┘  │         │    │  - Discover         │
+│          │ DBT      │         │    └─────────────────────┘
+│          ▼          │         │
+│  ┌───────────────┐  │         │
+│  │     GOLD      │  │         │
+│  │ (Aggregated)  │  │         │
+│  │  - fact_match │  │         │
+│  │  - dim_teams  │  │         │
+│  │  - agg_team   │  │         │
+│  │  - mart_*     │  │         │
+│  └───────────────┘  │         │
+└──────────┬──────────┘         │
+           │                    │
+           ▼                    │
+┌─────────────────────┐         │
+│  STREAMLIT DASHBOARD│◄────────┘
+│                     │
+│  - Overview         │
+│  - Team Analysis    │
+│  - Match Analysis   │
+└─────────────────────┘
+
+              ORCHESTRATION
+     ┌─────────────────────────────┐
+     │      APACHE AIRFLOW         │
+     │                             │
+     │  DAG: football_elt_pipeline │
+     │  Schedule: @weekly          │
+     │                             │
+     │  Tasks:                     │
+     │  1. extract_data            │
+     │  2. load_postgres           │
+     │  3. load_elasticsearch      │
+     │  4. dbt_transform           │
+     │  5. data_quality_checks     │
+     └─────────────────────────────┘
 ```
 
-### Data Layers
+### Couches de Donnees (Medallion Architecture)
 
-| Layer | Schema | Purpose | Models |
-|-------|--------|---------|--------|
-| **Bronze** | `bronze` | Raw data storage | `matches` |
-| **Silver** | `silver` | Cleaned & standardized | `stg_matches`, `stg_teams` |
-| **Gold** | `gold` | Business aggregations | `fact_matches`, `dim_teams`, `agg_team_performance`, `agg_competition_stats` |
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| **Orchestration** | Apache Airflow 2.7 |
-| **Transformation** | dbt-core 1.7 |
-| **Database** | PostgreSQL 15 |
-| **Visualization** | Streamlit + Plotly |
-| **Containerization** | Docker Compose |
-| **Language** | Python 3.11 |
+| Couche | Schema | Description | Tables |
+|--------|--------|-------------|--------|
+| Bronze | `bronze` | Donnees brutes non transformees | `matches`, `weather`, `team_values`, `competitions` |
+| Silver | `silver` | Donnees nettoyees et standardisees | `stg_matches`, `stg_teams`, `stg_weather`, `stg_team_values` |
+| Gold | `gold` | Agregations metier et marts | `fact_matches`, `dim_teams`, `agg_team_performance`, `mart_league_standings`, `mart_team_form` |
 
 ---
 
-## 🚀 Quick Start
+## Stack Technique
 
-### Prerequisites
+| Composant | Technologie | Version |
+|-----------|-------------|---------|
+| Orchestration | Apache Airflow | 2.7 |
+| Transformation | dbt-core | 1.7 |
+| Base de donnees | PostgreSQL | 15 |
+| Search Engine | Elasticsearch | 8.11 |
+| Visualisation Analytics | Kibana | 8.11 |
+| Dashboard | Streamlit + Plotly | - |
+| Containerisation | Docker Compose | - |
+| Langage | Python | 3.11 |
 
-- Docker & Docker Compose
-- PostgreSQL 15
+---
+
+## Sources de Donnees
+
+### Football-Data.org API
+- Matchs des ligues : Premier League, La Liga, Ligue 1
+- Resultats mi-temps et temps plein
+- Informations equipes et competitions
+- Rate limit : 10 requetes/minute (tier gratuit)
+
+### OpenWeather API
+- Temperature et conditions meteo
+- Donnees par ville de match
+
+### Transfermarkt (Web Scraping)
+- Valeurs de marche des equipes
+- Donnees financieres
+
+---
+
+## Installation
+
+### Prerequis
+
+- Docker et Docker Compose
+- PostgreSQL 15 (local ou Docker)
 - Python 3.9+
-- [Football-Data.org](https://www.football-data.org/) API key (free tier)
+- Cles API :
+  - [Football-Data.org](https://www.football-data.org/) (gratuit)
+  - [OpenWeather](https://openweathermap.org/api) (gratuit)
 
-### 1. Clone & Configure
+### 1. Cloner le projet
 
 ```bash
-git clone https://github.com/kabbstat/ELT_FOOTBALL_STAT.git
-cd ELT_FOOTBALL_STAT
-
-# Create environment file
-cp .env.example .env
-# Edit .env with your credentials
+git clone https://github.com/your-repo/DATA705-BIG-DATA.git
+cd DATA705-BIG-DATA
 ```
 
-### 2. Database Setup
+### 2. Configuration
+
+```bash
+# Copier le fichier d'environnement
+cp .env.example .env
+
+# Editer avec vos credentials
+# FOOTBALL_API_TOKEN=votre_token
+# OPENWEATHER_API_KEY=votre_cle
+# DB_PASS=votre_mot_de_passe
+```
+
+### 3. Base de donnees PostgreSQL
 
 ```sql
--- Connect to PostgreSQL
 CREATE DATABASE football_stats_db;
 CREATE USER football_user WITH PASSWORD 'your_password';
 GRANT ALL PRIVILEGES ON DATABASE football_stats_db TO football_user;
 
--- Create schemas
 \c football_stats_db
 CREATE SCHEMA bronze;
 CREATE SCHEMA silver;
@@ -110,105 +195,143 @@ CREATE SCHEMA gold;
 GRANT ALL ON SCHEMA bronze, silver, gold TO football_user;
 ```
 
-### 3. Start Services
+### 4. Demarrer les services
 
 ```bash
-# Start Airflow
+# Demarrer tous les services (Airflow, Elasticsearch, Kibana)
 docker-compose up -d
 
-# Access Airflow UI: http://localhost:8080
-# Credentials: admin / admin
+# Verifier les services
+docker-compose ps
 ```
 
-### 4. Run Pipeline
+### Acces aux interfaces
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Airflow | http://localhost:8080 | admin / admin |
+| Kibana | http://localhost:5601 | - |
+| Elasticsearch | http://localhost:9200 | - |
+| Streamlit | http://localhost:8501 | - |
+
+---
+
+## Utilisation
+
+### Extraction manuelle
 
 ```bash
-# Manual extraction
+# Extraire les donnees de match
 python extractor/foot_data.py
+
+# Extraire les donnees meteo
+python extractor/fetch_weather.py
+
+# Extraire les valeurs Transfermarkt
+python extractor/fetch_transfermarkt.py
+
+# Charger dans PostgreSQL
 python extractor/load_postgres.py
 
-# DBT transformations
-cd dbt_football/stat_foot
-dbt run --profiles-dir ~/.dbt
-dbt test --profiles-dir ~/.dbt
-
-# Launch dashboard
-streamlit run dashboard/app.py
-# Access: http://localhost:8501
+# Charger dans Elasticsearch
+python extractor/load_elasticsearch.py
 ```
 
----
-
-## 📁 Project Structure
-
-```
-football_stat/
-├── airflow/dags/           # Airflow DAG definitions
-├── extractor/              # Data extraction & loading scripts
-├── dbt_football/stat_foot/ # DBT project
-│   ├── models/
-│   │   ├── silver/         # Staging models
-│   │   └── gold/           # Business models
-│   └── tests/              # Custom data tests
-├── dashboard/              # Streamlit application
-├── data/                   # Parquet & JSON storage
-├── docker-compose.yaml     # Container orchestration
-└── requirement.txt         # Python dependencies
-```
-
----
-
-## 📊 Dashboard Views
-
-| View | Description |
-|------|-------------|
-| **Overview** | KPIs, recent matches, competition distribution |
-| **Competition Analysis** | Stats by league, home advantage, goal trends |
-| **Team Performance** | Rankings, top scorers, best defenses |
-| **Match Analysis** | High-scoring matches, goal distribution |
-| **Team Deep Dive** | Detailed stats for selected team |
-
----
-
-## 🧪 Data Quality
-
-### DBT Tests
-
-- **Source Tests**: ID uniqueness, not-null constraints, accepted values
-- **Custom Tests**: Valid scores, halftime ≤ fulltime, reasonable dates
+### Transformations DBT
 
 ```bash
-# Run all tests
+cd dbt_football/stat_foot
+
+# Installer les dependances DBT
+dbt deps --profiles-dir ~/.dbt
+
+# Executer les transformations
+dbt run --profiles-dir ~/.dbt
+
+# Lancer les tests
 dbt test --profiles-dir ~/.dbt
-# Expected: PASS=9 ERROR=0
+
+# Generer la documentation
+dbt docs generate --profiles-dir ~/.dbt
+```
+
+### Dashboard Streamlit
+
+```bash
+streamlit run dashboard/app.py
 ```
 
 ---
 
-## 📈 Roadmap
+## Structure du Projet
 
-- [ ] CI/CD with GitHub Actions
-- [ ] Additional leagues (Bundesliga, Serie A)
-- [ ] Match prediction ML models
-- [ ] Cloud deployment (AWS/GCP)
-- [ ] REST API for data access
+```
+DATA705-BIG-DATA/
+├── airflow/
+│   └── dags/
+│       └── football_elt_pipeline_v2.py    # DAG Airflow principal
+├── config/
+│   └── settings.py                         # Configuration centralisee
+├── dashboard/
+│   ├── app.py                              # Application Streamlit
+│   └── requirements.txt
+├── dbt_football/
+│   └── stat_foot/
+│       ├── models/
+│       │   ├── silver/                     # Modeles de staging
+│       │   │   ├── stg_matches.sql
+│       │   │   ├── stg_teams.sql
+│       │   │   ├── stg_weather.sql
+│       │   │   └── stg_team_values.sql
+│       │   └── gold/                       # Modeles business
+│       │       ├── fact_matches.sql
+│       │       ├── dim_teams.sql
+│       │       ├── agg_team_performance.sql
+│       │       ├── mart_league_standings.sql
+│       │       └── mart_team_form.sql
+│       └── tests/                          # Tests de qualite
+├── extractor/
+│   ├── foot_data.py                        # Extraction Football API
+│   ├── fetch_weather.py                    # Extraction meteo
+│   ├── fetch_transfermarkt.py              # Extraction valeurs marche
+│   ├── load_postgres.py                    # Chargement PostgreSQL
+│   ├── load_elasticsearch.py               # Chargement Elasticsearch
+│   ├── analytics_queries.py                # Requetes analytiques ES
+│   └── setup_kibana_dashboard.py           # Configuration Kibana
+├── docker-compose.yaml                     # Services Docker
+├── Dockerfile                              # Image Airflow custom
+├── requirement.txt                         # Dependances Python
+└── README.md
+```
 
 ---
 
-## 👨‍💻 Author
+## Tests de Qualite
 
-**Kabbstat** — Data Engineer
+### Tests DBT
 
-[![GitHub](https://img.shields.io/badge/GitHub-kabbstat-181717?logo=github)](https://github.com/kabbstat)
+| Type | Description |
+|------|-------------|
+| Unicite | Verification des IDs uniques |
+| Non-null | Champs obligatoires remplis |
+| Valeurs acceptees | Status de match valides |
+| Custom | Scores valides, mi-temps <= temps plein, dates raisonnables |
+
+```bash
+# Executer tous les tests
+dbt test --profiles-dir ~/.dbt
+
+# Resultat attendu : PASS=9 ERROR=0
+```
+
+### Fichiers de tests custom
+
+- `test_valid_scores.sql` : Verifie que les scores sont positifs
+- `test_halftime_vs_fulltime.sql` : Verifie coherence mi-temps/temps plein
+- `test_reasonable_dates.sql` : Verifie les dates dans une plage raisonnable
 
 ---
 
-## 📄 License
+## Licence
 
-MIT License — feel free to use this project for learning and development.
-
----
-
-<p align="center">
-  <b>⭐ Star this repo if you found it useful!</b>
-</p>
+MIT License

@@ -2,6 +2,8 @@
 """
 Setup Script for Football ELT Pipeline
 Automated setup and validation
+
+Mise a jour : Fevrier 2026 - Support Elasticsearch/Kibana
 """
 import os
 import sys
@@ -10,7 +12,7 @@ import subprocess
 
 
 class SetupManager:
-    """Manage project setup"""
+    """Manage project setup including Elasticsearch"""
     
     def __init__(self):
         self.project_root = Path(__file__).parent

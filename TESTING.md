@@ -1,15 +1,24 @@
-# 🧪 Guide de Test - Football ELT Pipeline
+# Guide de Test - Football ELT Pipeline
+
+> Derniere mise a jour : Fevrier 2026
 
 ## Tests Rapides (5 minutes)
 
 ### 1. Test de Configuration
 
 ```bash
-# Vérifier la configuration
+# Verifier la configuration
 python config/settings.py
 ```
 
-**Résultat attendu** : Affichage de la configuration et "✅ Configuration is valid"
+**Resultat attendu** : Affichage de la configuration et "Configuration is valid"
+
+### 1b. Test Elasticsearch
+
+```bash
+# Verifier la connexion Elasticsearch
+curl http://localhost:9200/_cluster/health
+```
 
 ### 2. Test d'Extraction (sans API)
 

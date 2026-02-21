@@ -1,8 +1,24 @@
-# 📝 Changelog - Production Upgrade
+# Changelog - Production Upgrade
+
+## Version 2.1.0 - Elasticsearch & Kibana Integration (2026-02-21)
+
+### Nouveautes
+
+#### Integration Elasticsearch/Kibana
+- Index `football-enriched-matches` avec donnees combinees matchs + meteo + valeurs
+- Dashboard Kibana avec visualisations interactives
+- Scripts : `load_elasticsearch.py`, `setup_kibana_dashboard.py`, `analytics_queries.py`
+- Index combine avec `create_combined_index.py`
+
+#### Sources de Donnees Supplementaires
+- `fetch_weather.py` : Extraction donnees meteo via OpenWeather API
+- `fetch_transfermarkt.py` : Valeurs de marche des equipes
+
+---
 
 ## Version 2.0.0 - Production-Grade ELT Pipeline (2025-12-30)
 
-### 🎉 Nouveautés Majeures
+### Nouveautes Majeures
 
 #### 1. Architecture Complète Bronze-Silver-Gold
 - ✨ **Modèles DBT Silver** :

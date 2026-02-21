@@ -1,17 +1,19 @@
-# Guide de Démarrage Rapide
+# Guide de Demarrage Rapide
 
-## Installation Rapide (15 minutes)
+> Derniere mise a jour : Fevrier 2026
+
+## Installation Rapide (20 minutes)
 
 ### 1. Configuration Initiale
 
 ```bash
 # Cloner le repo
-git clone https://github.com/kabbstat/ELT_FOOTBALL_STAT.git
-cd ELT_FOOTBALL_STAT
+git clone https://github.com/your-repo/DATA705-BIG-DATA.git
+cd DATA705-BIG-DATA
 
 # Configuration
 cp .env.example .env
-# Éditer .env avec vos credentials
+# Editer .env avec vos credentials (API Football, OpenWeather, DB)
 ```
 
 ### 2. Base de Données

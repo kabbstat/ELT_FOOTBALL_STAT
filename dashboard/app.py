@@ -1,6 +1,8 @@
 """
 Football Statistics Dashboard - Streamlit App
 Production-ready dashboard for football analytics
+
+Mise a jour : Fevrier 2026 - Integration donnees enrichies
 """
 import streamlit as st
 import pandas as pd

@@ -1,6 +1,8 @@
 """
 Configuration Management Module
 Centralized configuration for the Football ELT Pipeline
+
+Mise a jour : Fevrier 2026 - Ajout config Elasticsearch
 """
 import os
 from pathlib import Path

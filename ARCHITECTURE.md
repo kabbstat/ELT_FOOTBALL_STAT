@@ -1,19 +1,21 @@
 # Architecture du Projet
 
+> Derniere mise a jour : Fevrier 2026
+
 ## Vue d'ensemble
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     FOOTBALL ELT PIPELINE                        │
-│                   Production-Grade Architecture                  │
+│        Production-Grade Architecture + Elasticsearch/Kibana     │
 └─────────────────────────────────────────────────────────────────┘
 
-┌────────────────┐
-│  Data Sources  │
-│                │
-│  Football API  │ ← Rate limiting: 10 req/min
-│  (Free Tier)   │
-└───────┬────────┘
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│  Data Sources  │  │   OpenWeather  │  │  Transfermarkt │
+│                │  │                │  │                │
+│  Football API  │  │   Weather API  │  │  Market Values │
+│  (Free Tier)   │  │  (Free Tier)   │  │  (Scraping)    │
+└───────┬────────┘  └───────┬────────┘  └───────┬────────┘
         │
         │ HTTPS/JSON
         ▼

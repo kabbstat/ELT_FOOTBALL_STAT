@@ -1,19 +1,22 @@
 # Makefile for Football ELT Project
 # Facilite les commandes courantes
+# Mise a jour : Fevrier 2026 - Integration Elasticsearch/Kibana
 
-.PHONY: help install setup-db start-airflow stop-airflow run-extraction run-dbt run-dashboard test clean
+.PHONY: help install setup-db start-airflow stop-airflow run-extraction run-dbt run-dashboard test clean start-elastic load-elastic
 
 help:
 	@echo "Football ELT Pipeline - Commandes disponibles:"
 	@echo ""
-	@echo "  make install        - Installer les dépendances Python"
-	@echo "  make setup-db       - Créer la base de données et les schémas"
-	@echo "  make start-airflow  - Démarrer Airflow avec Docker"
-	@echo "  make stop-airflow   - Arrêter Airflow"
-	@echo "  make run-extraction - Exécuter l'extraction de données"
-	@echo "  make run-dbt        - Exécuter les transformations DBT"
+	@echo "  make install        - Installer les dependances Python"
+	@echo "  make setup-db       - Creer la base de donnees et les schemas"
+	@echo "  make start-airflow  - Demarrer Airflow avec Docker"
+	@echo "  make stop-airflow   - Arreter Airflow"
+	@echo "  make start-elastic  - Demarrer Elasticsearch et Kibana"
+	@echo "  make load-elastic   - Charger les donnees dans Elasticsearch"
+	@echo "  make run-extraction - Executer l'extraction de donnees"
+	@echo "  make run-dbt        - Executer les transformations DBT"
 	@echo "  make run-dashboard  - Lancer le dashboard Streamlit"
-	@echo "  make test           - Exécuter les tests DBT"
+	@echo "  make test           - Executer les tests DBT"
 	@echo "  make clean          - Nettoyer les fichiers temporaires"
 	@echo "  make logs           - Voir les logs Airflow"
 
