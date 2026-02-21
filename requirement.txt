@@ -1,0 +1,36 @@
+# ==============================================================================
+# Football ELT Pipeline - Python Dependencies
+# ==============================================================================
+
+# Core Dependencies
+python-dotenv==1.0.0
+pandas==2.1.0
+httpx==0.25.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# Elasticsearch
+elasticsearch>=8.11.0
+
+# Web Scraping (Transfermarkt)
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Data Formats
+pyarrow==14.0.0
+
+# DBT (for transformations)
+dbt-core==1.6.9
+dbt-postgres==1.6.9
+
+# Dashboard
+streamlit>=1.28.0
+plotly>=5.18.0
+
+# Development & Testing
+pytest==7.4.3
+
+# Note: apache-airflow has complex dependencies, install separately if needed
+# pip install apache-airflow==2.7.3

@@ -1,0 +1,54 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: "Raw data loaded from football API, weather API and Transfermarkt"
+    database: football_stats_db
+    schema: bronze
+    tables:
+      - name: matches
+        description: "All football matches data"
+        columns:
+          - name: id
+            description: Unique match identifier
+            tests:
+              - unique
+              - not_null
+          - name: status
+            description: Match status
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['FINISHED', 'SCHEDULED', 'IN_PLAY', 'PAUSED', 'TIMED', 'POSTPONED', 'CANCELLED', 'SUSPENDED', 'AWARDED']
+          - name: '"homeTeam_id"'
+            description: Home team ID
+            tests:
+              - not_null
+          - name: '"awayTeam_id"'
+            description: Away team ID
+            tests:
+              - not_null
+      - name: competitions
+        description: "Details of football competitions"
+      
+      - name: weather
+        description: "Weather data for match cities"
+        columns:
+          - name: city
+            description: City name
+            tests:
+              - not_null
+          - name: temperature
+            description: Temperature in Celsius
+          - name: weather_main
+            description: Main weather condition
+      
+      - name: team_values
+        description: "Team market values from Transfermarkt"
+        columns:
+          - name: team_name
+            description: Team name
+            tests:
+              - not_null
+          - name: market_value_eur
+            description: Market value in EUR

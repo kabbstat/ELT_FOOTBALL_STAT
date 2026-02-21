@@ -1,0 +1,116 @@
+version: 2
+
+models:
+  - name: mart_team_stats
+    description: "Comprehensive team statistics aggregated by competition"
+    columns:
+      - name: team_id
+        description: "Unique team identifier"
+        data_tests:
+          - not_null
+      
+      - name: team_name
+        description: "Team name"
+        data_tests:
+          - not_null
+      
+      - name: league_code
+        description: "Competition code (PL, FL1, PD)"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['PL', 'FL1', 'PD']
+      
+      - name: total_matches
+        description: "Total matches played"
+        data_tests:
+          - not_null
+      
+      - name: total_points
+        description: "Total points (3 for win, 1 for draw)"
+        data_tests:
+          - not_null
+      
+      - name: win_rate
+        description: "Percentage of matches won"
+
+  - name: mart_league_standings
+    description: "Current league standings with ranking"
+    columns:
+      - name: league_code
+        description: "Competition code"
+        data_tests:
+          - not_null
+      
+      - name: team_rank
+        description: "Current position in the league"
+        data_tests:
+          - not_null
+      
+      - name: team_name
+        description: "Team name"
+        data_tests:
+          - not_null
+
+  - name: mart_match_overview
+    description: "High-level match statistics and trends"
+    columns:
+      - name: league_code
+        description: "Competition code"
+      
+      - name: total_matches
+        description: "Total matches in the league"
+      
+      - name: avg_goals_per_match
+        description: "Average goals per match"
+
+  - name: mart_team_form
+    description: "Team form based on last 5 matches"
+    columns:
+      - name: team_id
+        description: "Team identifier"
+      
+      - name: team_name
+        description: "Team name"
+      
+      - name: last_5_points
+        description: "Points from last 5 matches"
+      
+      - name: current_form
+        description: "Form indicator (W/D/L sequence)"
+
+  - name: fact_matches_enriched
+    description: "Matches enriched with team market values for analytics"
+    columns:
+      - name: match_id
+        description: "Unique match identifier"
+        data_tests:
+          - unique
+          - not_null
+      - name: home_team_market_value
+        description: "Home team market value in EUR"
+      - name: away_team_market_value
+        description: "Away team market value in EUR"
+      - name: value_difference
+        description: "Difference in market value (home - away)"
+      - name: is_upset
+        description: "True if lower-value team won"
+      - name: favorite_by_value
+        description: "Which team was favorite based on market value"
+      - name: richer_team_won
+        description: "True if the team with higher market value won"
+
+  - name: agg_value_performance
+    description: "Analytics: Market value correlation with match outcomes"
+    columns:
+      - name: analysis_type
+        description: "Type of analysis (competition_analysis, value_tier_matchup)"
+      - name: competition_code
+        description: "Competition code"
+      - name: upset_rate_percent
+        description: "Percentage of upsets (lower value team winning)"
+      - name: richer_team_win_rate
+        description: "Win rate of richer team in non-draw matches"
+      - name: avg_goals
+        description: "Average goals per match"
