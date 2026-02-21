@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: bronze
-    description: "Raw data loaded from football API"
+    description: "Raw data loaded from football API, weather API and Transfermarkt"
     database: football_stats_db
     schema: bronze
     tables:
@@ -30,3 +30,25 @@ sources:
               - not_null
       - name: competitions
         description: "Details of football competitions"
+      
+      - name: weather
+        description: "Weather data for match cities"
+        columns:
+          - name: city
+            description: City name
+            tests:
+              - not_null
+          - name: temperature
+            description: Temperature in Celsius
+          - name: weather_main
+            description: Main weather condition
+      
+      - name: team_values
+        description: "Team market values from Transfermarkt"
+        columns:
+          - name: team_name
+            description: Team name
+            tests:
+              - not_null
+          - name: market_value_eur
+            description: Market value in EUR

@@ -32,7 +32,14 @@ dbt_packages/
 
 # Sensitive files
 psql.txt
-*.sql
+
+# Non-code documents
+*.docx
+*.pdf
+
+# Abandoned directories
+extractor_bis/
+fast_api_extractor/
 
 # IDE
 .vscode/

@@ -79,3 +79,38 @@ models:
       
       - name: current_form
         description: "Form indicator (W/D/L sequence)"
+
+  - name: fact_matches_enriched
+    description: "Matches enriched with team market values for analytics"
+    columns:
+      - name: match_id
+        description: "Unique match identifier"
+        data_tests:
+          - unique
+          - not_null
+      - name: home_team_market_value
+        description: "Home team market value in EUR"
+      - name: away_team_market_value
+        description: "Away team market value in EUR"
+      - name: value_difference
+        description: "Difference in market value (home - away)"
+      - name: is_upset
+        description: "True if lower-value team won"
+      - name: favorite_by_value
+        description: "Which team was favorite based on market value"
+      - name: richer_team_won
+        description: "True if the team with higher market value won"
+
+  - name: agg_value_performance
+    description: "Analytics: Market value correlation with match outcomes"
+    columns:
+      - name: analysis_type
+        description: "Type of analysis (competition_analysis, value_tier_matchup)"
+      - name: competition_code
+        description: "Competition code"
+      - name: upset_rate_percent
+        description: "Percentage of upsets (lower value team winning)"
+      - name: richer_team_win_rate
+        description: "Win rate of richer team in non-draw matches"
+      - name: avg_goals
+        description: "Average goals per match"

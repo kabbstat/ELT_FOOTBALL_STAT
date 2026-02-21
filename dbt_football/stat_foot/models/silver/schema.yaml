@@ -63,3 +63,37 @@ models:
         description: "Full competition name"
         data_tests:
           - not_null
+
+  - name: stg_weather
+    description: "Cleaned weather data for football cities"
+    columns:
+      - name: city
+        description: "City name"
+        data_tests:
+          - not_null
+      - name: temperature_celsius
+        description: "Temperature in Celsius"
+      - name: weather_condition
+        description: "Main weather condition (Rain, Clear, Clouds, etc.)"
+      - name: is_rainy
+        description: "Boolean flag for rainy conditions"
+      - name: weather_category
+        description: "Weather category (favorable, adverse, extreme)"
+
+  - name: stg_team_values
+    description: "Team market values from Transfermarkt"
+    columns:
+      - name: team_name
+        description: "Full team name"
+        data_tests:
+          - not_null
+      - name: competition_code
+        description: "Competition code (PL, FL1, PD)"
+      - name: market_value_eur
+        description: "Team market value in EUR"
+        data_tests:
+          - not_null
+      - name: value_tier
+        description: "Value category (elite, top_tier, mid_tier, etc.)"
+      - name: avg_player_value_eur
+        description: "Average player value in EUR"

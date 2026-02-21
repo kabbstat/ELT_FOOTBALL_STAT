@@ -11,6 +11,13 @@ httpx==0.25.0
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 
+# Elasticsearch
+elasticsearch>=8.11.0
+
+# Web Scraping (Transfermarkt)
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
 # Data Formats
 pyarrow==14.0.0
 
