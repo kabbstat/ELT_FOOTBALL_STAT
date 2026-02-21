@@ -8,6 +8,10 @@ sources:
     tables:
       - name: matches
         description: "All football matches data"
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+        loaded_at_field: '"lastUpdated"::timestamp'
         columns:
           - name: id
             description: Unique match identifier
@@ -33,6 +37,10 @@ sources:
       
       - name: weather
         description: "Weather data for match cities"
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+        loaded_at_field: "fetched_at::timestamp"
         columns:
           - name: city
             description: City name
@@ -45,10 +53,17 @@ sources:
       
       - name: team_values
         description: "Team market values from Transfermarkt"
+        freshness:
+          warn_after: {count: 14, period: day}
+          error_after: {count: 30, period: day}
+        loaded_at_field: "fetched_at::timestamp"
         columns:
           - name: team_name
             description: Team name
             tests:
               - not_null
+              - unique
           - name: market_value_eur
             description: Market value in EUR
+            tests:
+              - not_null

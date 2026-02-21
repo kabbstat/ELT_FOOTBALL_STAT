@@ -114,3 +114,67 @@ models:
         description: "Win rate of richer team in non-draw matches"
       - name: avg_goals
         description: "Average goals per match"
+
+  - name: fact_matches_full
+    description: "Fully enriched fact table joining matches + team values + weather. Central analytical model."
+    columns:
+      - name: match_id
+        description: "Unique match identifier"
+        data_tests:
+          - unique
+          - not_null
+      - name: weather_impact_score
+        description: "Composite weather impact score (0=ideal, higher=worse conditions)"
+      - name: is_upset
+        description: "True if match was an upset (lower-value team won)"
+      - name: combined_market_value
+        description: "Sum of home + away team market values"
+      - name: weather_condition
+        description: "Weather at match location (Clear, Rain, Clouds, etc.)"
+
+  - name: mart_weather_impact
+    description: "Analysis of weather conditions impact on match outcomes and scoring"
+    columns:
+      - name: analysis_type
+        description: "Type: by_condition, by_temperature, or adverse_vs_favorable"
+      - name: category
+        description: "Weather condition or temperature range"
+      - name: avg_goals
+        description: "Average goals per match in this category"
+      - name: home_win_rate_pct
+        description: "Home win rate percentage"
+
+  - name: mart_value_roi
+    description: "ROI analysis: performance per euro of market value, with bargain/overspend classification"
+    columns:
+      - name: team_name
+        description: "Team name"
+        data_tests:
+          - not_null
+      - name: points_per_million_eur
+        description: "Points earned per million EUR of market value"
+      - name: roi_classification
+        description: "Bargain, overperformer, on track, underperformer, or overspend"
+      - name: efficiency_rank
+        description: "Rank of efficiency within the league"
+      - name: rank_difference
+        description: "Expected rank minus actual rank (positive = overperforming)"
+
+  - name: mart_prediction_features
+    description: "ML-ready feature table with 6 feature categories for match outcome prediction"
+    columns:
+      - name: match_id
+        description: "Unique match identifier"
+        data_tests:
+          - unique
+          - not_null
+      - name: match_result_encoded
+        description: "Target variable: 1=home win, 0=draw, -1=away win"
+      - name: value_advantage_pct
+        description: "Home team value advantage as percentage [-1, 1]"
+      - name: home_form_points
+        description: "Home team points from last 5 matches"
+      - name: away_form_points
+        description: "Away team points from last 5 matches"
+      - name: home_advantage_score
+        description: "Composite home advantage score"
