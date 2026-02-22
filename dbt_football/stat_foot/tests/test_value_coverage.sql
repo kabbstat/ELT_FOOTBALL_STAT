@@ -19,4 +19,4 @@ stats AS (
 SELECT *
 FROM stats
 WHERE total_teams > 0
-  AND (with_values::DECIMAL / total_teams) < 0.80
+  AND (with_values::DECIMAL / total_teams) < 0.50

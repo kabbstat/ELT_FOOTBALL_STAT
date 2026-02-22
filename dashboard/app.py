@@ -10,6 +10,10 @@ from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import numpy as np
 
 # Page configuration
 st.set_page_config(
@@ -97,11 +101,12 @@ def get_team_performance():
     return load_data(query)
 
 
-def get_recent_matches(limit=20):
+def get_recent_matches(limit=100):
     """Get recent matches"""
     query = f"""
     SELECT 
         match_date,
+        match_year,
         competition_name,
         home_team_name,
         away_team_name,
@@ -139,6 +144,57 @@ def get_matches_by_team(team_name):
     return load_data(query)
 
 
+@st.cache_resource(ttl=3600)
+def train_match_predictor():
+    """Fetches ML features and trains a model"""
+    query = """
+    SELECT 
+        match_result_encoded, 
+        value_advantage_pct, 
+        home_team_win_rate, 
+        away_team_win_rate,
+        home_advantage_score,
+        temperature, 
+        rain_mm
+    FROM gold.mart_prediction_features
+    WHERE match_result_encoded IS NOT NULL
+    """
+    df = load_data(query)
+    
+    if df.empty or len(df) < 50:
+        return None, None
+        
+    df.fillna(0, inplace=True)
+    
+    features = ['value_advantage_pct', 'home_team_win_rate', 'away_team_win_rate', 'home_advantage_score', 'temperature', 'rain_mm']
+    X = df[features]
+    y = df['match_result_encoded']
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    model = RandomForestClassifier(n_estimators=100, max_depth=8, random_state=42)
+    model.fit(X_train, y_train)
+    
+    acc = accuracy_score(y_test, model.predict(X_test))
+    
+    return model, acc
+
+
+def get_latest_team_stats(team_name, is_home):
+    """Fetches the latest stats for a given team to use in prediction"""
+    query = f"""
+    SELECT 
+        (SELECT COALESCE(win_rate, 0) FROM gold.mart_team_stats WHERE team_name = '{team_name}' LIMIT 1) as win_pct,
+        (SELECT COALESCE(
+            CASE WHEN home_team_name = '{team_name}' THEN home_market_value ELSE away_market_value END, 
+        0) FROM gold.fact_matches_full WHERE home_team_name = '{team_name}' OR away_team_name = '{team_name}' ORDER BY match_date DESC LIMIT 1) as team_market_value
+    """
+    df = load_data(query)
+    if not df.empty:
+        return float(df.iloc[0]['win_pct'] or 0.0), float(df.iloc[0]['team_market_value'] or 0.0)
+    return 0.0, 0.0
+
+
 # ============================================================================
 # DASHBOARD LAYOUT
 # ============================================================================
@@ -156,28 +212,36 @@ def main():
         
         page = st.radio(
             "Select View",
-            ["📊 Overview", "🏆 Competition Analysis", "👥 Team Performance", "📈 Match Analysis", "🔍 Team Deep Dive"],
+            ["📊 Overview", "🏆 Competition Analysis", "👥 Team Performance", "📈 Match Analysis", "🔍 Team Deep Dive", "🔮 Match Probability"],
             label_visibility="collapsed"
         )
         
         st.markdown("---")
         st.markdown("### 🎯 Filters")
         
-        # Year filter
-        available_years = [2024, 2023]
-        selected_year = st.selectbox(
-            "📅 Select Season",
-            options=["All Years"] + available_years,
-            index=0
-        )
-        
-        # Competition filter
-        available_competitions = ["All Competitions", "PL - Premier League", "FL1 - Ligue 1", "PD - La Liga"]
-        selected_competition_filter = st.selectbox(
-            "🏆 Select Competition",
-            options=available_competitions,
-            index=0
-        )
+        # Get dynamic options directly from data
+        try:
+            comp_stats_for_filters = get_competition_stats()
+            # Year filter
+            available_years = sorted(comp_stats_for_filters['match_year'].unique().tolist(), reverse=True)
+            selected_year = st.selectbox(
+                "📅 Select Season",
+                options=["All Years"] + available_years,
+                index=0
+            )
+            
+            # Competition filter
+            available_competitions = sorted(comp_stats_for_filters['competition_name'].unique().tolist())
+            selected_competition_filter = st.selectbox(
+                "🏆 Select Competition",
+                options=["All Competitions"] + available_competitions,
+                index=0
+            )
+        except Exception as e:
+            # Fallback in case of DB issues
+            selected_year = "All Years"
+            selected_competition_filter = "All Competitions"
+            st.error("Could not load filters from database")
         
         st.markdown("---")
         st.markdown("### 📅 Data Refresh")
@@ -199,17 +263,22 @@ def main():
         # Load data
         comp_stats = get_competition_stats()
         team_perf = get_team_performance()
-        recent = get_recent_matches(10)
+        recent = get_recent_matches(100)
         
         # Apply year filter
         if selected_year != "All Years":
-            comp_stats = comp_stats[comp_stats['match_year'] == selected_year]
+            comp_stats = comp_stats[comp_stats['match_year'] == int(selected_year)]
+            recent = recent[recent['match_year'] == int(selected_year)]
         
         # Apply competition filter
         if selected_competition_filter != "All Competitions":
-            comp_code = selected_competition_filter.split(" - ")[0]
-            comp_stats = comp_stats[comp_stats['competition_code'] == comp_code]
-            team_perf = team_perf[team_perf['competition_code'] == comp_code]
+            comp_stats = comp_stats[comp_stats['competition_name'] == selected_competition_filter]
+            recent = recent[recent['competition_name'] == selected_competition_filter]
+            if not comp_stats.empty:
+                comp_code = comp_stats['competition_code'].iloc[0]
+                team_perf = team_perf[team_perf['competition_code'] == comp_code]
+            else:
+                team_perf = pd.DataFrame(columns=team_perf.columns)
         
         # Key Metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -239,19 +308,23 @@ def main():
             st.subheader("🔥 Recent Matches")
             
             # Format recent matches for display
-            recent_display = recent.copy()
-            recent_display['Match'] = (
-                recent_display['home_team_name'] + ' ' +
-                recent_display['fulltime_home_score'].astype(str) + ' - ' +
-                recent_display['fulltime_away_score'].astype(str) + ' ' +
-                recent_display['away_team_name']
-            )
+            recent_display = recent.head(10).copy()
             
-            st.dataframe(
-                recent_display[['match_date', 'competition_name', 'Match', 'match_outcome']],
-                use_container_width=True,
-                hide_index=True
-            )
+            if not recent_display.empty:
+                recent_display['Match'] = (
+                    recent_display['home_team_name'] + ' ' +
+                    recent_display['fulltime_home_score'].astype(str) + ' - ' +
+                    recent_display['fulltime_away_score'].astype(str) + ' ' +
+                    recent_display['away_team_name']
+                )
+                
+                st.dataframe(
+                    recent_display[['match_date', 'competition_name', 'Match', 'match_outcome']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("No recent matches found for this filter.")
         
         with col2:
             st.subheader("📈 Competition Distribution")
@@ -275,7 +348,7 @@ def main():
         
         # Apply year filter from sidebar
         if selected_year != "All Years":
-            comp_stats = comp_stats[comp_stats['match_year'] == selected_year]
+            comp_stats = comp_stats[comp_stats['match_year'] == int(selected_year)]
         
         # Filter by competition
         selected_comp = st.selectbox(
@@ -341,7 +414,9 @@ def main():
         
         # Apply competition filter from sidebar if set
         if selected_competition_filter != "All Competitions":
-            comp_code = selected_competition_filter.split(" - ")[0]
+            full_stats = get_competition_stats()
+            comp_code_row = full_stats[full_stats['competition_name'] == selected_competition_filter]
+            comp_code = comp_code_row['competition_code'].iloc[0] if not comp_code_row.empty else None
             team_perf = team_perf[team_perf['competition_code'] == comp_code]
         
         # Filter by competition (page level)
@@ -413,12 +488,11 @@ def main():
         
         # Apply year filter from sidebar
         if selected_year != "All Years":
-            comp_stats = comp_stats[comp_stats['match_year'] == selected_year]
+            comp_stats = comp_stats[comp_stats['match_year'] == int(selected_year)]
         
         # Apply competition filter from sidebar
         if selected_competition_filter != "All Competitions":
-            comp_code = selected_competition_filter.split(" - ")[0]
-            comp_stats = comp_stats[comp_stats['competition_code'] == comp_code]
+            comp_stats = comp_stats[comp_stats['competition_name'] == selected_competition_filter]
         
         # High scoring matches analysis
         col1, col2 = st.columns(2)
@@ -477,7 +551,9 @@ def main():
         
         # Apply competition filter from sidebar
         if selected_competition_filter != "All Competitions":
-            comp_code = selected_competition_filter.split(" - ")[0]
+            full_stats = get_competition_stats()
+            comp_code_row = full_stats[full_stats['competition_name'] == selected_competition_filter]
+            comp_code = comp_code_row['competition_code'].iloc[0] if not comp_code_row.empty else None
             team_perf = team_perf[team_perf['competition_code'] == comp_code]
         
         # Team selector
@@ -574,6 +650,107 @@ def main():
         else:
             st.info("No match data available for this team")
     
+    # ========================================================================
+    # PAGE: MATCH PREDICTION
+    # ========================================================================
+    
+    elif page == "🔮 Match Probability":
+        st.header("🔮 Match Probability Calculator")
+        st.markdown("Calculate the statistical probability of a match outcome based on historical market value, team form, and weather conditions.")
+        
+        with st.spinner("Processing Historical Data..."):
+            model, accuracy = train_match_predictor()
+            
+        if model:
+            st.success(f"Data processed successfully! (Confidence Score: {accuracy*100:.1f}%)")
+            
+            # Fetch all teams to populate dropdowns
+            teams_df = get_team_performance()
+            all_teams = sorted(teams_df['team_name'].unique()) if not teams_df.empty else ["Team A", "Team B"]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("🏠 Home Team")
+                home_input = st.selectbox("Select Home Team", all_teams, index=0)
+                
+            with col2:
+                st.subheader("✈️ Away Team")
+                away_input = st.selectbox("Select Away Team", all_teams, index=min(1, len(all_teams)-1))
+                
+            st.markdown("---")
+            st.subheader("🌦️ Match Conditions")
+            col3, col4 = st.columns(2)
+            with col3:
+                temp_input = st.slider("Temperature (°C)", -5, 40, 15)
+            with col4:
+                rain_input = st.slider("Rain (mm/h)", 0.0, 50.0, 0.0)
+                
+            if st.button("🔮 Predict Match Outcome", type="primary"):
+                if home_input == away_input:
+                    st.error("Please select two different teams!")
+                else:
+                    # Get pseudo-live stats
+                    home_win_pct, home_mv = get_latest_team_stats(home_input, True)
+                    away_win_pct, away_mv = get_latest_team_stats(away_input, False)
+                    
+                    # Compute derived features like in dbt
+                    combined_mv = home_mv + away_mv
+                    if combined_mv > 0:
+                        value_adv = (home_mv - away_mv) / combined_mv
+                    else:
+                        value_adv = 0.0
+                        
+                    # Simulate a basic home advantage score
+                    home_adv_score = value_adv * 10 
+                    
+                    # Construct feature array
+                    # Order: 'value_advantage_pct', 'home_team_win_rate', 'away_team_win_rate', 'home_advantage_score', 'temperature', 'rain_mm'
+                    X_pred = np.array([[value_adv, home_win_pct, away_win_pct, home_adv_score, temp_input, rain_input]])
+                    
+                    # Predict probabilities
+                    probs = model.predict_proba(X_pred)[0]
+                    classes = model.classes_  # e.g., [-1, 0, 1]
+                    
+                    # Map classes to outcome labels
+                    # We know from DBT: 1=home win, 0=draw, -1=away win
+                    prob_dict = {c: p for c, p in zip(classes, probs)}
+                    
+                    home_prob = prob_dict.get(1, 0)
+                    draw_prob = prob_dict.get(0, 0)
+                    away_prob = prob_dict.get(-1, 0)
+                    
+                    # Display Results
+                    st.markdown("### 📊 Prediction Results")
+                    
+                    res_col1, res_col2, res_col3 = st.columns(3)
+                    with res_col1:
+                        st.metric(f"🏠 {home_input} Win", f"{home_prob*100:.1f}%")
+                    with res_col2:
+                         st.metric("🤝 Draw", f"{draw_prob*100:.1f}%")
+                    with res_col3:
+                        st.metric(f"✈️ {away_input} Win", f"{away_prob*100:.1f}%")
+                        
+                    # Visualise
+                    prob_df = pd.DataFrame({
+                        "Outcome": [f"{home_input} Win", "Draw", f"{away_input} Win"],
+                        "Probability": [home_prob, draw_prob, away_prob]
+                    })
+                    
+                    fig = px.bar(
+                        prob_df, 
+                        x="Probability", 
+                        y="Outcome", 
+                        orientation="h",
+                        color="Outcome",
+                        color_discrete_map={f"{home_input} Win": "#2ecc71", "Draw": "#f39c12", f"{away_input} Win": "#e74c3c"},
+                        title="Win Probabilities"
+                    )
+                    fig.update_layout(xaxis=dict(tickformat=".0%"))
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+        else:
+            st.warning("Not enough historical data to train model yet. Ensure dbt models have run.")
+
     # Footer
     st.markdown("---")
     st.markdown(

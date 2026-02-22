@@ -10,12 +10,12 @@ models:
           - unique
           - not_null
       
-      - name: match_datetime
+      - name: match_utc_date
         description: "Match date and time in UTC"
         data_tests:
           - not_null
       
-      - name: status
+      - name: match_status
         description: "Match status"
         data_tests:
           - not_null

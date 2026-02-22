@@ -45,7 +45,7 @@ cleaned AS (
         CAST(visibility AS INTEGER) AS visibility_meters,
         
         -- Timestamps
-        CAST(timestamp AS TIMESTAMP) AS weather_timestamp,
+        CAST(fetched_at AS TIMESTAMP) AS weather_timestamp,
         CAST(fetched_at AS TIMESTAMP) AS fetched_at,
         
         -- Derived fields
