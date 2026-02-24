@@ -57,10 +57,11 @@ jobs:
     
     - name: Validate Python Syntax
       run: |
-        python -m py_compile extractor/foot_data_enhanced.py
-        python -m py_compile extractor/load_postgres_enhanced.py
+        python -m py_compile extractor/fetch_daily_matches.py
+        python -m py_compile extractor/fetch_football_news.py
+        python -m py_compile extractor/load_postgres.py
         python -m py_compile config/settings.py
-        echo "✅ Python syntax validation passed"
+        echo "Python syntax validation passed"
     
     - name: Install DBT
       run: |

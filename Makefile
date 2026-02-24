@@ -14,6 +14,7 @@ help:
 	@echo "  make start-elastic  - Demarrer Elasticsearch et Kibana"
 	@echo "  make load-elastic   - Charger les donnees dans Elasticsearch"
 	@echo "  make run-extraction - Executer l'extraction de donnees"
+	@echo "  make run-news       - Extraire les actualites football (RSS)"
 	@echo "  make run-dbt        - Executer les transformations DBT"
 	@echo "  make run-dashboard  - Lancer le dashboard Streamlit"
 	@echo "  make test           - Executer les tests DBT"
@@ -50,9 +51,14 @@ logs:
 
 run-extraction:
 	@echo "Extraction des données..."
-	python extractor/foot_data_enhanced.py
-	python extractor/load_postgres_enhanced.py
-	@echo "✅ Extraction terminée"
+	python extractor/fetch_daily_matches.py
+	python extractor/load_postgres.py
+	@echo "Extraction terminée"
+
+run-news:
+	@echo "Extraction des actualités football..."
+	python extractor/fetch_football_news.py
+	@echo "Actualités indexées dans Elasticsearch"
 
 run-dbt:
 	@echo "Exécution des transformations DBT..."

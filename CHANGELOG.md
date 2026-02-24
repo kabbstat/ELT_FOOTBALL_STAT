@@ -1,5 +1,43 @@
 # Changelog - Production Upgrade
 
+## Version 3.0.0 - DAG v3, News & Dual-Branch Architecture (2026-02-22)
+
+### Nouveautes
+
+#### Architecture DAG v3 (Dual-Branch)
+- DAG `football_elt_pipeline_v3` avec orchestration quotidienne (`0 6 * * *`)
+- Branche inconditionnelle : weather + transfermarkt + news (execution quotidienne)
+- Branche conditionnelle : matchs + match weather (gated par ShortCircuitOperator selon les jours de match)
+- `trigger_rule='none_failed_min_one_success'` sur dbt_snapshot pour eviter la propagation des skips
+- Snapshot dbt des valeurs de marche (`snapshot_team_values`)
+
+#### Extraction News RSS
+- `fetch_football_news.py` : extraction multi-sources (BBC, ESPN, Sky Sports, Marca, L'Equipe, Guardian)
+- Detection automatique des equipes (~80 equipes) et ligues dans les articles
+- Indexation Elasticsearch avec analyseur `football_analyzer` (synonymes multilingues)
+- Deduplication par `article_id`, recherche full-text avec fuzziness
+
+#### Dashboard - Page News Search
+- 7eme page Streamlit : recherche d'actualites football
+- Barre de recherche avec fuzziness, filtres (langue/source/ligue)
+- Cartes de resultats avec highlights, statistiques et graphiques
+- Import ES optionnel avec fallback gracieux
+
+#### Modele dbt stg_competitions
+- `stg_competitions.sql` ajout dans silver/ (lecture depuis bronze.competitions)
+
+#### Nettoyage de code
+- Suppression des patterns AI (emoji prints, ASCII art, docstrings verbeux, bannieres)
+- DAG v3 : 639 -> 409 lignes
+- Code plus lisible et maintenable
+
+#### Corrections
+- Dockerfile : httpx au lieu de requests, ajout beautifulsoup4/lxml/elasticsearch/scikit-learn
+- Docker Compose : tous les services Airflow sur `football-network`
+- Suppression du conflit SQLAlchemy 2.0.23 (incompatible avec Airflow 2.7.3)
+
+---
+
 ## Version 2.1.0 - Elasticsearch & Kibana Integration (2026-02-21)
 
 ### Nouveautes

@@ -77,6 +77,7 @@ class SetupManager:
         required_dirs = [
             'data/landing',
             'data/raw',
+            'data/news',
             'logs',
             'airflow/logs',
             'dashboard',

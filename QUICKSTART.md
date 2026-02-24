@@ -38,11 +38,18 @@ EOF
 # Installer les dépendances
 pip install -r requirement.txt
 
-# Exécuter l'extraction
-python extractor/foot_data_enhanced.py
+# Exécuter l'extraction des matchs
+python extractor/fetch_daily_matches.py
+
+# Extraire meteo et valeurs de marche
+python extractor/fetch_weather.py
+python extractor/fetch_transfermarkt.py
+
+# Extraire les actualites football
+python extractor/fetch_football_news.py
 
 # Charger dans PostgreSQL
-python extractor/load_postgres_enhanced.py
+python extractor/load_postgres.py
 ```
 
 ### 4. Transformations DBT
@@ -82,7 +89,7 @@ dbt test --profiles-dir ~/.dbt
 streamlit run dashboard/app.py
 
 # Exécuter l'extraction manuellement
-python extractor/foot_data_enhanced.py
+python extractor/fetch_daily_matches.py
 ```
 
 ## Structure des Données
@@ -90,16 +97,27 @@ python extractor/foot_data_enhanced.py
 ### Bronze Layer (Raw)
 - `bronze.matches` : Tous les matchs bruts
 - `bronze.competitions` : Informations des compétitions
+- `bronze.weather` : Données météo brutes
+- `bronze.team_values` : Valeurs de marché brutes
 
 ### Silver Layer (Cleaned)
 - `silver.stg_matches` : Matchs nettoyés
 - `silver.stg_teams` : Équipes standardisées
+- `silver.stg_competitions` : Metadata compétitions
+- `silver.stg_weather` : Météo nettoyée
+- `silver.stg_team_values` : Valeurs de marché normalisées
 
 ### Gold Layer (Business)
 - `gold.fact_matches` : Table de faits des matchs
 - `gold.dim_teams` : Dimension des équipes
 - `gold.agg_team_performance` : Agrégations par équipe
 - `gold.agg_competition_stats` : Stats par compétition
+- `gold.mart_league_standings` : Classements
+- `gold.mart_team_form` : Forme récente
+
+### Elasticsearch
+- Index `football-enriched-matches` : Données combinées
+- Index `football_news` : Actualités football (recherche full-text)
 
 ## Requêtes SQL Utiles
 

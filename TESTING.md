@@ -171,7 +171,7 @@ docker-compose ps
 **Vérifications** :
 1. Accéder à http://localhost:8080
 2. Login : admin / admin
-3. Activer le DAG `football_elt_pipeline_enhanced`
+3. Activer le DAG `football_elt_pipeline_v3`
 4. Déclencher manuellement
 5. Surveiller l'exécution
 
@@ -464,10 +464,11 @@ chmod +x run_tests.sh
 1. **Setup** : `python setup.py`
 2. **Configuration** : `python config/settings.py`
 3. **DB Connection** : `python extractor/test_db_connexion.py`
-4. **Extraction** : `python extractor/foot_data_enhanced.py`
-5. **Loading** : `python extractor/load_postgres_enhanced.py`
-6. **DBT** : `cd dbt_football/stat_foot && dbt run && dbt test`
-7. **Dashboard** : `cd dashboard && streamlit run app.py`
-8. **Airflow** : `docker-compose up -d`
+4. **Extraction** : `python extractor/fetch_daily_matches.py`
+5. **Loading** : `python extractor/load_postgres.py`
+6. **News** : `python extractor/fetch_football_news.py`
+7. **DBT** : `cd dbt_football/stat_foot && dbt run && dbt test`
+8. **Dashboard** : `cd dashboard && streamlit run app.py`
+9. **Airflow** : `docker-compose up -d`
 
 Bonne chance avec les tests ! 🚀

@@ -24,6 +24,7 @@ Ce projet implemente un pipeline ELT (Extract, Load, Transform) pour collecter, 
 - Matchs et resultats depuis Football-Data.org API
 - Donnees meteorologiques via OpenWeather API
 - Valeurs de marche des equipes depuis Transfermarkt
+- Actualites football via flux RSS (BBC, ESPN, Sky Sports, Marca, L'Equipe, Guardian)
 
 Les donnees sont stockees dans PostgreSQL avec une architecture medallion (Bronze, Silver, Gold) et indexees dans Elasticsearch pour des recherches et visualisations avancees via Kibana.
 
@@ -33,10 +34,10 @@ Les donnees sont stockees dans PostgreSQL avec une architecture medallion (Bronz
 
 ```
                            SOURCES DE DONNEES
-     ┌─────────────────┬─────────────────┬─────────────────┐
-     │  Football API   │  OpenWeather    │  Transfermarkt  │
-     │   (Matchs)      │   (Meteo)       │  (Valeurs)      │
-     └────────┬────────┴────────┬────────┴────────┬────────┘
+     ┌─────────────────┬─────────────────┬─────────────────┬─────────────────┐
+     │  Football API   │  OpenWeather    │  Transfermarkt  │  RSS Feeds      │
+     │   (Matchs)      │   (Meteo)       │  (Valeurs)      │  (Actualites)   │
+     └────────┬────────┴────────┬────────┴────────┬────────┴────────┬────────┘
               │                 │                 │
               └─────────────────┼─────────────────┘
                                 │
@@ -44,9 +45,11 @@ Les donnees sont stockees dans PostgreSQL avec une architecture medallion (Bronz
                     │   EXTRACTION LAYER    │
                     │   (Python Scripts)    │
                     │                       │
-                    │  - foot_data.py       │
+                    │  - fetch_daily_matches │
                     │  - fetch_weather.py   │
                     │  - fetch_transfermarkt│
+                    │  - fetch_football_news│
+                    │  - load_postgres.py   │
                     └───────────┬───────────┘
                                 │
               ┌─────────────────┼─────────────────┐
@@ -86,25 +89,34 @@ Les donnees sont stockees dans PostgreSQL avec une architecture medallion (Bronz
            ▼                    │
 ┌─────────────────────┐         │
 │  STREAMLIT DASHBOARD│◄────────┘
-│                     │
+│  (7 pages)          │
 │  - Overview         │
-│  - Team Analysis    │
+│  - Competition      │
+│  - Team Performance │
 │  - Match Analysis   │
+│  - Team Deep Dive   │
+│  - Match Probability│
+│  - News Search      │
 └─────────────────────┘
 
               ORCHESTRATION
      ┌─────────────────────────────┐
      │      APACHE AIRFLOW         │
      │                             │
-     │  DAG: football_elt_pipeline │
-     │  Schedule: @weekly          │
+     │  DAG: football_elt_pipeline  │
+     │        _v3 (dual-branch)     │
+     │  Schedule: 0 6 * * *        │
+     │  (quotidien a 06:00 UTC)    │
      │                             │
      │  Tasks:                     │
-     │  1. extract_data            │
-     │  2. load_postgres           │
-     │  3. load_elasticsearch      │
-     │  4. dbt_transform           │
-     │  5. data_quality_checks     │
+     │  1. extract (weather,       │
+     │     transfermarkt, news)    │
+     │  2. check_match_days        │
+     │  3. load_postgres           │
+     │  4. dbt_snapshot + run +    │
+     │     test + freshness        │
+     │  5. index_elasticsearch     │
+     │  6. quality_report          │
      └─────────────────────────────┘
 ```
 
@@ -149,6 +161,11 @@ Les donnees sont stockees dans PostgreSQL avec une architecture medallion (Bronz
 - Valeurs de marche des equipes
 - Donnees financieres
 
+### RSS Feeds (Actualites)
+- BBC Sport, ESPN, Sky Sports, Marca, L'Equipe, The Guardian
+- Detection automatique des equipes et ligues
+- Indexation Elasticsearch avec recherche full-text
+
 ---
 
 ## Installation
@@ -157,7 +174,7 @@ Les donnees sont stockees dans PostgreSQL avec une architecture medallion (Bronz
 
 - Docker et Docker Compose
 - PostgreSQL 15 (local ou Docker)
-- Python 3.9+
+- Python 3.11+
 - Cles API :
   - [Football-Data.org](https://www.football-data.org/) (gratuit)
   - [OpenWeather](https://openweathermap.org/api) (gratuit)
@@ -222,13 +239,16 @@ docker-compose ps
 
 ```bash
 # Extraire les donnees de match
-python extractor/foot_data.py
+python extractor/fetch_daily_matches.py
 
 # Extraire les donnees meteo
 python extractor/fetch_weather.py
 
 # Extraire les valeurs Transfermarkt
 python extractor/fetch_transfermarkt.py
+
+# Extraire les actualites football
+python extractor/fetch_football_news.py
 
 # Charger dans PostgreSQL
 python extractor/load_postgres.py
@@ -269,11 +289,12 @@ streamlit run dashboard/app.py
 DATA705-BIG-DATA/
 ├── airflow/
 │   └── dags/
-│       └── football_elt_pipeline_v2.py    # DAG Airflow principal
+│       ├── football_elt_pipeline_v2.py    # DAG Airflow v2
+│       └── football_elt_pipeline_v3.py    # DAG Airflow v3 (actif)
 ├── config/
 │   └── settings.py                         # Configuration centralisee
 ├── dashboard/
-│   ├── app.py                              # Application Streamlit
+│   ├── app.py                              # Application Streamlit (7 pages)
 │   └── requirements.txt
 ├── dbt_football/
 │   └── stat_foot/
@@ -281,6 +302,7 @@ DATA705-BIG-DATA/
 │       │   ├── silver/                     # Modeles de staging
 │       │   │   ├── stg_matches.sql
 │       │   │   ├── stg_teams.sql
+│       │   │   ├── stg_competitions.sql
 │       │   │   ├── stg_weather.sql
 │       │   │   └── stg_team_values.sql
 │       │   └── gold/                       # Modeles business
@@ -289,11 +311,15 @@ DATA705-BIG-DATA/
 │       │       ├── agg_team_performance.sql
 │       │       ├── mart_league_standings.sql
 │       │       └── mart_team_form.sql
+│       ├── snapshots/
+│       │   └── snapshot_team_values.sql     # Snapshot valeurs marche
 │       └── tests/                          # Tests de qualite
 ├── extractor/
-│   ├── foot_data.py                        # Extraction Football API
+│   ├── fetch_daily_matches.py              # Extraction matchs quotidiens
 │   ├── fetch_weather.py                    # Extraction meteo
+│   ├── fetch_match_weather.py              # Meteo par match
 │   ├── fetch_transfermarkt.py              # Extraction valeurs marche
+│   ├── fetch_football_news.py              # Extraction actualites RSS
 │   ├── load_postgres.py                    # Chargement PostgreSQL
 │   ├── load_elasticsearch.py               # Chargement Elasticsearch
 │   ├── analytics_queries.py                # Requetes analytiques ES

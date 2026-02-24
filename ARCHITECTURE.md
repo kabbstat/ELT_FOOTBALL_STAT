@@ -10,23 +10,24 @@
 │        Production-Grade Architecture + Elasticsearch/Kibana     │
 └─────────────────────────────────────────────────────────────────┘
 
-┌────────────────┐  ┌────────────────┐  ┌────────────────┐
-│  Data Sources  │  │   OpenWeather  │  │  Transfermarkt │
-│                │  │                │  │                │
-│  Football API  │  │   Weather API  │  │  Market Values │
-│  (Free Tier)   │  │  (Free Tier)   │  │  (Scraping)    │
-└───────┬────────┘  └───────┬────────┘  └───────┬────────┘
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│  Data Sources  │  │   OpenWeather  │  │  Transfermarkt │  │   RSS Feeds    │
+│                │  │                │  │                │  │                │
+│  Football API  │  │   Weather API  │  │  Market Values │  │  News Articles │
+│  (Free Tier)   │  │  (Free Tier)   │  │  (Scraping)    │  │  (8 sources)   │
+└───────┬────────┘  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘
         │
         │ HTTPS/JSON
         ▼
 ┌───────────────────────────────────────────────────────────────┐
 │                      EXTRACTION LAYER                          │
 │  ┌──────────────────────────────────────────────────────┐    │
-│  │  foot_data_enhanced.py                               │    │
-│  │  - Error handling & retry logic                      │    │
-│  │  - Rate limiting                                      │    │
-│  │  - Structured logging                                 │    │
-│  │  - Data validation                                    │    │
+│  │  fetch_daily_matches.py   - Matchs quotidiens        │    │
+│  │  fetch_weather.py         - Meteo des villes         │    │
+│  │  fetch_match_weather.py   - Meteo par match          │    │
+│  │  fetch_transfermarkt.py   - Valeurs de marche        │    │
+│  │  fetch_football_news.py   - Actualites RSS (8 feeds) │    │
+│  │  load_postgres.py         - Chargement Bronze        │    │
 │  └──────────────────────────────────────────────────────┘    │
 └───────┬───────────────────────────────────────────────────────┘
         │
@@ -67,12 +68,13 @@
 │  │  Schema: silver                                       │    │
 │  │  - stg_matches (cleaned & standardized)              │    │
 │  │  - stg_teams (deduplicated)                          │    │
+│  │  - stg_competitions (metadata competitions)          │    │
+│  │  - stg_weather (meteo nettoyee)                      │    │
+│  │  - stg_team_values (valeurs marche normalisees)      │    │
 │  │                                                        │    │
 │  │  Transformations:                                     │    │
-│  │  ✓ Type casting                                      │    │
-│  │  ✓ Null handling                                     │    │
-│  │  ✓ Column renaming                                   │    │
-│  │  ✓ Date parsing                                      │    │
+│  │  ✓ Type casting & null handling                      │    │
+│  │  ✓ Column renaming & date parsing                    │    │
 │  │  ✓ Deduplication                                     │    │
 │  └──────────────────────────────────────────────────────┘    │
 └───────┬───────────────────────────────────────────────────────┘
@@ -94,6 +96,10 @@
 │  │  - agg_team_performance                              │    │
 │  │  - agg_competition_stats                             │    │
 │  │                                                        │    │
+│  │  Marts:                                               │    │
+│  │  - mart_league_standings                             │    │
+│  │  - mart_team_form                                    │    │
+│  │                                                        │    │
 │  │  Optimizations:                                       │    │
 │  │  ✓ Indexes on foreign keys                          │    │
 │  │  ✓ Materialized as tables                           │    │
@@ -112,6 +118,8 @@
 │  │  - Team Performance                                  │    │
 │  │  - Match Analysis                                    │    │
 │  │  - Team Deep Dive                                    │    │
+│  │  - Match Probability (scikit-learn)                  │    │
+│  │  - News Search (Elasticsearch full-text)             │    │
 │  │                                                        │    │
 │  │  Features:                                            │    │
 │  │  ✓ Interactive charts (Plotly)                      │    │
@@ -124,22 +132,29 @@
 ┌───────────────────────────────────────────────────────────────┐
 │                   ORCHESTRATION (Airflow)                      │
 │                                                                 │
-│  DAG: football_elt_pipeline_enhanced                           │
-│  Schedule: @weekly                                             │
+│  DAG: football_elt_pipeline_v3                                 │
+│  Schedule: 0 6 * * * (quotidien a 06:00 UTC)                  │
 │                                                                 │
-│  Tasks:                                                         │
-│  1. extract_football_data                                      │
-│  2. validate_extracted_data                                    │
-│  3. load_to_bronze                                             │
-│  4. dbt_transformation (clean → deps → run → test → docs)     │
-│  5. data_quality_checks                                        │
-│  6. send_success_report                                        │
+│  Architecture dual-branch :                                     │
+│                                                                 │
+│  Branche inconditionnelle (quotidienne) :                      │
+│  1. extract_weather                                            │
+│  2. extract_transfermarkt                                      │
+│  3. extract_news (RSS → Elasticsearch)                         │
+│                                                                 │
+│  Branche conditionnelle (jours de match) :                     │
+│  4. check_match_days (ShortCircuitOperator)                    │
+│  5. extract_daily_matches → load_matches                       │
+│  6. extract_match_weather                                      │
+│                                                                 │
+│  Pipeline commun :                                              │
+│  7. dbt_snapshot → dbt_run → dbt_test → dbt_freshness         │
+│  8. index_elasticsearch → generate_docs → quality_report       │
 │                                                                 │
 │  Features:                                                      │
-│  ✓ Error handling                                             │
-│  ✓ Retry logic                                                │
-│  ✓ Monitoring & alerting                                      │
-│  ✓ TaskGroups for organization                               │
+│  ✓ trigger_rule pour eviter propagation des skips             │
+│  ✓ Retry logic & error handling                               │
+│  ✓ Parallel extraction tasks                                  │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -186,12 +201,17 @@ football_stats_db
 │   └── competitions
 ├── silver
 │   ├── stg_matches (cleaned)
-│   └── stg_teams (deduplicated)
+│   ├── stg_teams (deduplicated)
+│   ├── stg_competitions (metadata)
+│   ├── stg_weather (meteo)
+│   └── stg_team_values (valeurs marche)
 └── gold
     ├── fact_matches (core facts)
     ├── dim_teams (dimension)
     ├── agg_team_performance (aggregated)
-    └── agg_competition_stats (aggregated)
+    ├── agg_competition_stats (aggregated)
+    ├── mart_league_standings (classements)
+    └── mart_team_form (forme recente)
 ```
 
 ### Airflow
@@ -199,9 +219,10 @@ football_stats_db
 ```
 airflow/
 ├── dags/
-│   └── football_elt_dag_enhanced.py
+│   ├── football_elt_pipeline_v2.py
+│   └── football_elt_pipeline_v3.py
 ├── logs/
-│   └── dag_id=football_elt_pipeline_enhanced/
+│   └── dag_id=football_elt_pipeline_v3/
 └── plugins/
 ```
 
@@ -259,11 +280,13 @@ dashboard/
 
 | Composant | Version | Justification |
 |-----------|---------|---------------|
-| Python | 3.9+ | Type hints, performances |
+| Python | 3.11 | Type hints, performances |
 | PostgreSQL | 15 | Fonctionnalités modernes |
-| Airflow | 2.7+ | TaskGroups, UI améliorée |
-| DBT | 1.6+ | Tests améliorés |
+| Airflow | 2.7.3 | TaskGroups, UI améliorée |
+| DBT | 1.7 | Tests améliorés, snapshots |
 | Streamlit | 1.28+ | Components modernes |
+| Elasticsearch | 8.11 | Full-text search, news |
+| Kibana | 8.11 | Visualisations analytics |
 | Docker | 20.10+ | Containerization |
 
 ## Sécurité

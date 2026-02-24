@@ -117,6 +117,24 @@ class LoggingConfig:
 
 
 @dataclass
+class ElasticsearchConfig:
+    """Elasticsearch configuration"""
+    host: str
+    port: int
+    
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}"
+    
+    @classmethod
+    def from_env(cls):
+        return cls(
+            host=os.getenv('ES_HOST', 'localhost'),
+            port=int(os.getenv('ES_PORT', 9200))
+        )
+
+
+@dataclass
 class PipelineConfig:
     """Pipeline configuration"""
     leagues: list
@@ -129,7 +147,7 @@ class PipelineConfig:
         return cls(
             leagues=os.getenv('LEAGUES', 'PL,FL1,PD').split(','),
             seasons=[int(y) for y in os.getenv('SEASONS', '2023,2024').split(',')],
-            schedule=os.getenv('PIPELINE_SCHEDULE', '@weekly')
+            schedule=os.getenv('PIPELINE_SCHEDULE', '0 6 * * *')
         )
 
 
@@ -142,6 +160,7 @@ class Config:
         self.paths = PathConfig.from_env()
         self.logging = LoggingConfig.from_env()
         self.pipeline = PipelineConfig.from_env()
+        self.elasticsearch = ElasticsearchConfig.from_env()
         
         # Ensure directories exist
         self.paths.ensure_dirs()
