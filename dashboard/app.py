@@ -15,6 +15,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import numpy as np
 
+# Elasticsearch (optional)
+try:
+    from elasticsearch import Elasticsearch
+    ES_AVAILABLE = True
+except ImportError:
+    ES_AVAILABLE = False
+
 # Page configuration
 st.set_page_config(
     page_title="⚽ Football Stats Dashboard",
@@ -212,7 +219,7 @@ def main():
         
         page = st.radio(
             "Select View",
-            ["📊 Overview", "🏆 Competition Analysis", "👥 Team Performance", "📈 Match Analysis", "🔍 Team Deep Dive", "🔮 Match Probability"],
+            ["📊 Overview", "🏆 Competition Analysis", "👥 Team Performance", "📈 Match Analysis", "🔍 Team Deep Dive", "🔮 Match Probability", "📰 News Search"],
             label_visibility="collapsed"
         )
         
@@ -751,12 +758,249 @@ def main():
         else:
             st.warning("Not enough historical data to train model yet. Ensure dbt models have run.")
 
+    elif page == "📰 News Search":
+        st.header("📰 Football News Search")
+        st.markdown("Search football news from BBC, ESPN, L'Equipe, Marca, Guardian and more.")
+        
+        es_host = os.getenv('ES_HOST', 'localhost')
+        es_port = os.getenv('ES_PORT', '9200')
+        
+        if not ES_AVAILABLE:
+            st.error("❌ `elasticsearch` Python package not installed. Run: `pip install elasticsearch`")
+        else:
+            try:
+                es = Elasticsearch([f"http://{es_host}:{es_port}"], request_timeout=10)
+                es_connected = es.ping()
+            except Exception:
+                es_connected = False
+            
+            if not es_connected:
+                st.warning(f"⚠️ Cannot connect to Elasticsearch at {es_host}:{es_port}. Make sure it's running.")
+                st.info("💡 Start with: `docker-compose up -d elasticsearch`")
+            else:
+                # Check if index exists
+                index_exists = es.indices.exists(index="football_news")
+                
+                if not index_exists:
+                    st.warning("⚠️ No news indexed yet. Run the news extractor first:")
+                    st.code("python extractor/fetch_football_news.py", language="bash")
+                else:
+                    # Get index stats
+                    try:
+                        news_count = es.count(index="football_news")["count"]
+                        st.success(f"✅ Connected to Elasticsearch — **{news_count:,}** articles indexed")
+                    except Exception:
+                        news_count = 0
+                    
+                    col_search, col_lang = st.columns([3, 1])
+                    with col_search:
+                        search_query = st.text_input(
+                            "🔍 Search football news",
+                            placeholder="e.g. Mbappé transfer, Arsenal derby, Ligue 1 résultats...",
+                            key="news_search"
+                        )
+                    with col_lang:
+                        lang_filter = st.selectbox(
+                            "🌐 Language",
+                            ["All", "English", "French", "Spanish"],
+                            index=0
+                        )
+                    
+                    col_f1, col_f2, col_f3 = st.columns(3)
+                    with col_f1:
+                        league_filter = st.multiselect(
+                            "🏆 League",
+                            ["PL", "FL1", "PD", "CL", "UEL"],
+                            default=[]
+                        )
+                    with col_f2:
+                        # Get available sources from ES
+                        try:
+                            src_agg = es.search(
+                                index="football_news",
+                                body={"size": 0, "aggs": {"sources": {"terms": {"field": "source_name", "size": 20}}}},
+                            )
+                            available_sources = [b["key"] for b in src_agg["aggregations"]["sources"]["buckets"]]
+                        except Exception:
+                            available_sources = []
+                        source_filter = st.multiselect("📡 Source", available_sources, default=[])
+                    with col_f3:
+                        max_results = st.slider("📄 Max results", 5, 50, 20)
+                    
+                    if search_query:
+                        must_clauses = [
+                            {
+                                "multi_match": {
+                                    "query": search_query,
+                                    "fields": ["title^3", "description^2", "content_text"],
+                                    "type": "best_fields",
+                                    "fuzziness": "AUTO",
+                                }
+                            }
+                        ]
+                        filter_clauses = []
+                        
+                        lang_map = {"English": "en", "French": "fr", "Spanish": "es"}
+                        if lang_filter != "All":
+                            filter_clauses.append({"term": {"source_language": lang_map[lang_filter]}})
+                        if league_filter:
+                            filter_clauses.append({"terms": {"leagues_mentioned": league_filter}})
+                        if source_filter:
+                            filter_clauses.append({"terms": {"source_name": source_filter}})
+                        
+                        body = {
+                            "query": {
+                                "bool": {
+                                    "must": must_clauses,
+                                    "filter": filter_clauses,
+                                }
+                            },
+                            "size": max_results,
+                            "sort": [{"_score": "desc"}, {"published_at": "desc"}],
+                            "highlight": {
+                                "fields": {
+                                    "title": {"number_of_fragments": 0},
+                                    "description": {"fragment_size": 250, "number_of_fragments": 2},
+                                },
+                                "pre_tags": ["**"],
+                                "post_tags": ["**"],
+                            },
+                        }
+                        
+                        try:
+                            results = es.search(index="football_news", body=body)
+                            hits = results["hits"]["hits"]
+                            total = results["hits"]["total"]["value"]
+                            
+                            st.markdown(f"### 📋 {total} result{'s' if total != 1 else ''} for *\"{search_query}\"*")
+                            
+                            if not hits:
+                                st.info("No articles found. Try different keywords or broader filters.")
+                            
+                            for hit in hits:
+                                src = hit["_source"]
+                                score = hit["_score"]
+                                highlights = hit.get("highlight", {})
+                                
+                                # Use highlighted title if available
+                                title = highlights.get("title", [src.get("title", "Untitled")])[0]
+                                desc = highlights.get("description", [src.get("description", "")])[0]
+                                try:
+                                    pub_date = datetime.fromisoformat(src.get("published_at", "")).strftime("%d %b %Y %H:%M")
+                                except Exception:
+                                    pub_date = src.get("published_at", "Unknown")
+                                
+                                teams = src.get("teams_mentioned", [])
+                                leagues = src.get("leagues_mentioned", [])
+                                link = src.get("link", "#")
+                                source_name = src.get("source_name", "Unknown")
+                                lang = src.get("source_language", "")
+                                lang_flag = {"en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸"}.get(lang, "🌐")
+                                
+                                with st.container():
+                                    st.markdown(f"#### [{title}]({link})")
+                                    st.markdown(f"{desc}" if desc else "")
+                                    
+                                    meta_parts = [f"{lang_flag} **{source_name}**", f"📅 {pub_date}", f"🎯 Score: {score:.1f}"]
+                                    if teams:
+                                        meta_parts.append(f"⚽ {', '.join(teams[:5])}")
+                                    if leagues:
+                                        meta_parts.append(f"🏆 {', '.join(leagues)}")
+                                    
+                                    st.caption(" | ".join(meta_parts))
+                                    st.markdown("---")
+                        
+                        except Exception as e:
+                            st.error(f"Search error: {e}")
+                    
+                    else:
+                        st.markdown("### 📊 News Index Overview")
+                        
+                        try:
+                            stats_body = {
+                                "size": 0,
+                                "aggs": {
+                                    "by_source": {"terms": {"field": "source_name", "size": 20}},
+                                    "by_language": {"terms": {"field": "source_language", "size": 10}},
+                                    "by_team": {"terms": {"field": "teams_mentioned", "size": 15}},
+                                    "by_league": {"terms": {"field": "leagues_mentioned", "size": 10}},
+                                },
+                            }
+                            stats_result = es.search(index="football_news", body=stats_body)
+                            aggs = stats_result["aggregations"]
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                # Articles by source
+                                src_data = pd.DataFrame(
+                                    [{"Source": b["key"], "Articles": b["doc_count"]} for b in aggs["by_source"]["buckets"]]
+                                )
+                                if not src_data.empty:
+                                    fig_src = px.bar(src_data, x="Articles", y="Source", orientation="h",
+                                                     title="Articles by Source", color="Articles",
+                                                     color_continuous_scale="blues")
+                                    fig_src.update_layout(height=350, showlegend=False)
+                                    st.plotly_chart(fig_src, use_container_width=True)
+                            
+                            with col2:
+                                # Most mentioned teams
+                                team_data = pd.DataFrame(
+                                    [{"Team": b["key"], "Mentions": b["doc_count"]} for b in aggs["by_team"]["buckets"]]
+                                )
+                                if not team_data.empty:
+                                    fig_team = px.bar(team_data, x="Mentions", y="Team", orientation="h",
+                                                      title="Most Mentioned Teams", color="Mentions",
+                                                      color_continuous_scale="greens")
+                                    fig_team.update_layout(height=350, showlegend=False)
+                                    st.plotly_chart(fig_team, use_container_width=True)
+                            
+                            # Language distribution
+                            lang_data = pd.DataFrame(
+                                [{"Language": {"en": "English 🇬🇧", "fr": "French 🇫🇷", "es": "Spanish 🇪🇸"}.get(b["key"], b["key"]),
+                                  "Count": b["doc_count"]} for b in aggs["by_language"]["buckets"]]
+                            )
+                            if not lang_data.empty:
+                                fig_lang = px.pie(lang_data, values="Count", names="Language",
+                                                  title="Articles by Language")
+                                fig_lang.update_layout(height=300)
+                                st.plotly_chart(fig_lang, use_container_width=True)
+                        
+                        except Exception as e:
+                            st.warning(f"Could not load stats: {e}")
+                        
+                        # Show latest articles
+                        st.markdown("### 📄 Latest Articles")
+                        try:
+                            latest = es.search(
+                                index="football_news",
+                                body={"query": {"match_all": {}}, "size": 10, "sort": [{"published_at": "desc"}]},
+                            )
+                            for hit in latest["hits"]["hits"]:
+                                src = hit["_source"]
+                                title = src.get("title", "Untitled")
+                                link = src.get("link", "#")
+                                source_name = src.get("source_name", "Unknown")
+                                lang = src.get("source_language", "")
+                                lang_flag = {"en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸"}.get(lang, "🌐")
+                                teams = src.get("teams_mentioned", [])
+                                try:
+                                    pub_date = datetime.fromisoformat(src.get("published_at", "")).strftime("%d %b %Y")
+                                except Exception:
+                                    pub_date = ""
+                                
+                                team_tags = f" — ⚽ {', '.join(teams[:3])}" if teams else ""
+                                st.markdown(f"- {lang_flag} [{title}]({link}) — *{source_name}* ({pub_date}){team_tags}")
+                        
+                        except Exception as e:
+                            st.warning(f"Could not load latest articles: {e}")
+
     # Footer
     st.markdown("---")
     st.markdown(
         f"<p style='text-align: center; color: #666;'>"
         f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | "
-        f"Data source: Football-Data.org API"
+        f"Data source: Football-Data.org API + RSS News Feeds"
         f"</p>",
         unsafe_allow_html=True
     )

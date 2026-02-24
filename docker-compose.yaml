@@ -58,6 +58,8 @@ services:
     restart: always
     ports: 
       - "5433:5432"
+    networks:
+      - football-network
 
   airflow-webserver:
     <<: *airflow-common
@@ -74,6 +76,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - football-network
 
   airflow-scheduler:
     <<: *airflow-common
@@ -88,6 +92,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - football-network
 
   airflow-init:
     <<: *airflow-common
@@ -107,6 +113,8 @@ services:
     user: "0:0"
     volumes:
       - .:/sources
+    networks:
+      - football-network
 
   # ============================================
   # ELASTICSEARCH - Search & Analytics Engine
