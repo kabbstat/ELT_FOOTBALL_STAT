@@ -341,6 +341,7 @@ with dag:
     check_matches = ShortCircuitOperator(
         task_id='check_for_matches',
         python_callable=check_for_matches,
+        ignore_downstream_trigger_rules=False,
     )
 
     with TaskGroup(group_id='match_extraction') as match_extraction_group:
@@ -358,6 +359,7 @@ with dag:
         task_id='load_daily_matches',
         python_callable=load_daily_matches_to_postgres,
     )
+
 
     # Transformations (dbt)
     with TaskGroup(group_id='transformation') as transformation_group:
@@ -387,18 +389,21 @@ with dag:
         )
         dbt_snapshot >> dbt_run >> dbt_test >> dbt_freshness
 
-    # Post-processing
+    # Post-processing (run even when match branch is skipped)
     elasticsearch_index = PythonOperator(
         task_id='index_to_elasticsearch',
         python_callable=index_to_elasticsearch,
+        trigger_rule='none_failed_min_one_success',
     )
     dbt_docs = BashOperator(
         task_id='dbt_docs_generate',
         bash_command='cd /opt/airflow/dbt_football/stat_foot && dbt docs generate --profiles-dir /home/airflow/.dbt --target docker',
+        trigger_rule='none_failed_min_one_success',
     )
     quality_report = PythonOperator(
         task_id='data_quality_report',
         python_callable=generate_quality_report,
+        trigger_rule='none_failed_min_one_success',
     )
 
     # Dependencies
